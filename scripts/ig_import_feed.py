@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Chrome'dan alınan kaydedilenler akışı dökümünden (saved-feed.json) meta + medya içe aktarır (paralel).
+"""Imports meta + media (in parallel) from the Saved feed dump taken in Chrome (saved-feed.json).
 
-Neden: akış API'si her postun açıklamasını, hesabını, tarihini, ses türünü, doğrudan video adresini ve carousel/foto görsel
-adreslerini zaten verir. Reel videoları yt-dlp'siz, çerezsiz, Anahtar Zinciri izinsiz ve paralel inebilir (post başı 3-6 sn bekleme
-yok); resimli postlar tek tek gezilmez. Yedek yol: ig_download.py (yt-dlp), dökümde adresi olmayan/süresi dolan postlar için.
+Why: the feed API already returns each post's caption, account, date, audio type, direct video URL and carousel/photo
+image URLs. Reel videos can be downloaded without yt-dlp, cookies or Keychain prompts, and in parallel (no 3-6 s wait per
+post); image posts are not visited one by one. Fallback: ig_download.py (yt-dlp) for posts with no URL or an expired one.
 
-Dosya biçimi (JSON dizi), chrome-snippets.md "Besleme dökümü" parçasının çıktısı:
-  {c: kod, t: 1 foto | 2 video | 8 carousel, at: unix, u: hesap, cap: açıklama, d: süre, v: video URL, ha: ses var mı,
-   au: ses türü (original_sounds | licensed_music), mu: şarkı adı, s: [{t: slayt türü, i: görsel URL, v: slayt video URL}]}
-Adresler imzalıdır ve süresi dolar (saatler): dökümü indirmeden kısa süre önce al.
+File format (JSON array), output of the "Feed dump" snippet in chrome-snippets.md:
+  {c: code, t: 1 photo | 2 video | 8 carousel, at: unix, u: account, cap: caption, d: duration, v: video URL, ha: has audio,
+   au: audio type (original_sounds | licensed_music), mu: song title, s: [{t: slide type, i: image URL, v: slide video URL}]}
+URLs are signed and expire (hours): take the dump shortly before downloading.
 
-Kullanım: ig_import_feed.py --workdir W --file saved-feed.json [--codes A,B] [--no-media]
-Yalnız state'te olan, medyası henüz inmemiş postlar için çalışır. İdempotenttir.
+Usage: ig_import_feed.py --workdir W --file saved-feed.json [--codes A,B] [--no-media]
+Works only on posts that are in state and whose media is not downloaded yet. Idempotent.
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from pathlib import Path
 
 from ig_common import advance, base_parser, cache_dir, load_config, load_state, save_state, workers
 
-TYPE_NAME = {1: "Foto", 2: "Reel", 8: "Carousel"}
+TYPE_NAME = {1: "Photo", 2: "Reel", 8: "Carousel"}
 
 
 def download(url: str, dest: Path) -> None:
@@ -33,16 +33,16 @@ def download(url: str, dest: Path) -> None:
         while chunk := r.read(1 << 20):
             f.write(chunk)
     if tmp.stat().st_size == 0:
-        raise OSError("boş dosya")
+        raise OSError("empty file")
     tmp.replace(dest)
 
 
 def fetch_post(code: str, row: dict, cd: Path):
-    """Bir postun medyasını indirir (iş parçacığında). (kod, dosya listesi | None, hata | None) döndürür."""
+    """Downloads the media of one post (in a thread). Returns (code, file list | None, error | None)."""
     out = cd / "media" / code
     out.mkdir(parents=True, exist_ok=True)
     t = row.get("t")
-    items = []  # (URL, dosya adı)
+    items = []  # (URL, file name)
     if t == 2 and row.get("v"):
         items = [(row["v"], "01.mp4")]
     elif t in (1, 8):
@@ -52,15 +52,15 @@ def fetch_post(code: str, row: dict, cd: Path):
             elif s.get("i"):
                 items.append((s["i"], f"{i:02d}.jpg"))
     if not items:
-        return code, None, "dökümde indirilebilir adres yok"
+        return code, None, "no downloadable URL in the dump"
     files = []
     for url, name in items:
         dest = out / name
         try:
             if not dest.exists() or dest.stat().st_size == 0:
                 download(url, dest)
-        except Exception as e:  # noqa: BLE001 - tek hata tüm partiyi durdurmasın
-            return code, None, f"indirilemedi ({name}): {str(e)[:100]} (adres süresi dolmuş olabilir: yeni döküm al)"
+        except Exception as e:  # noqa: BLE001 - one failure must not stop the whole batch
+            return code, None, f"download failed ({name}): {str(e)[:100]} (the URL may have expired: take a new dump)"
         files.append(str(dest.relative_to(cd)))
     return code, files, None
 
@@ -85,9 +85,9 @@ def apply_meta(post: dict, r: dict) -> None:
 
 def main() -> None:
     p = base_parser(__doc__)
-    p.add_argument("--file", required=True, help="Akış dökümü JSON")
-    p.add_argument("--codes", help="Yalnız bu kodlar (virgülle)")
-    p.add_argument("--no-media", action="store_true", help="Yalnız meta; medya indirme")
+    p.add_argument("--file", required=True, help="Feed dump JSON")
+    p.add_argument("--codes", help="Only these codes (comma separated)")
+    p.add_argument("--no-media", action="store_true", help="Meta only; do not download media")
     args = p.parse_args()
     wd = Path(args.workdir)
     cfg = load_config(wd)
@@ -109,7 +109,7 @@ def main() -> None:
     save_state(wd, state)
 
     ok = failed = 0
-    with ThreadPoolExecutor(max_workers=min(workers(cfg) * 2, 12)) as pool:  # ağ bekleyen iş: çekirdekten fazla iş parçacığı
+    with ThreadPoolExecutor(max_workers=min(workers(cfg) * 2, 12)) as pool:  # network-bound work: more threads than cores
         futs = [pool.submit(fetch_post, c, r, cd) for c, r in todo]
         for f in as_completed(futs):
             code, files, err = f.result()
@@ -123,7 +123,7 @@ def main() -> None:
                 post["error"] = err
                 failed += 1
             save_state(wd, state)
-    print(f"meta={meta} medya_indirilen={ok} hata={failed}" + ("  (hatalılar için ig_download.py yedek yolu)" if failed else ""))
+    print(f"meta={meta} media_downloaded={ok} errors={failed}" + ("  (use ig_download.py as the fallback for failures)" if failed else ""))
 
 
 if __name__ == "__main__":

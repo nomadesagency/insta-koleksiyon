@@ -1,20 +1,20 @@
 {
-  "_doc": "Her postta 1 ana kategori (zorunlu) + en fazla max_secondary ikincil etiket. Değerler bu listeden birebir seçilir; liste dışı değer Excel üretimini durdurur.",
+  "_doc": "Each post gets 1 main category (required) + at most max_secondary secondary tags. Values are picked verbatim from this list; a value outside it stops the spreadsheet build.",
   "max_secondary": 2,
-  "fallback": "Diğer",
+  "fallback": "Other",
   "categories": [
-    "İçerik Stratejisi & Planlama",
-    "Hook, Kapak & Metin Yazımı",
-    "Reels & Video Üretimi",
-    "Carousel & Görsel Tasarım",
-    "Marka & Konumlandırma",
-    "Satış, Teklif & Müşteri Kazanımı",
-    "Yapay Zeka & Otomasyon",
-    "Araçlar & Verimlilik",
-    "Büyüme, Algoritma & Analitik",
-    "Girişimcilik & İş Modeli",
-    "Kişisel Gelişim & Zihniyet",
-    "Sektör İlhamı",
-    "Diğer"
+    "Content Strategy & Planning",
+    "Hooks, Covers & Copywriting",
+    "Reels & Video Production",
+    "Carousels & Visual Design",
+    "Brand & Positioning",
+    "Sales, Offers & Client Acquisition",
+    "AI & Automation",
+    "Tools & Productivity",
+    "Growth, Algorithm & Analytics",
+    "Entrepreneurship & Business Models",
+    "Personal Growth & Mindset",
+    "Industry Inspiration",
+    "Other"
   ]
 }

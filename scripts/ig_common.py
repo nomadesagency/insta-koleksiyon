@@ -1,7 +1,7 @@
-"""Ortak yardımcılar: config, state.json (atomik yazım + doğrulama), taksonomi, PATH.
+"""Shared helpers: config, state.json (atomic write + verification), taxonomy, PATH.
 
-Özel veri taşımaz. Yollar --workdir (state.json, config, Excel: küçük dosyalar) ve
---cachedir (media/, frames/: ağır dosyalar, çalışma alanı dışında) argümanlarından gelir.
+Holds no personal data. Paths come from --workdir (state.json, config, spreadsheet: small files) and
+--cachedir (media/, frames/: heavy files, kept outside the working folder).
 """
 from __future__ import annotations
 
@@ -20,25 +20,25 @@ from pathlib import Path
 SKILL_DIR = Path(__file__).resolve().parent.parent
 _MISSING = object()
 STAGES = ["listed", "meta", "media", "ocr", "reviewed", "done"]
-# cron/non-login shell'lerde Homebrew PATH'te olmayabilir
+# Homebrew may be missing from PATH in cron/non-login shells
 os.environ["PATH"] = "/opt/homebrew/bin:/usr/local/bin:" + os.environ.get("PATH", "")
 
 
 def base_parser(desc: str) -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=desc)
-    p.add_argument("--workdir", required=True, help="Özel çalışma alanı klasörü (state.json, config.json, Excel)")
-    p.add_argument("--cachedir", help="media/ ve frames/ klasörlerinin yeri (varsayılan: config cache_dir veya "
-                   "~/Desktop/insta-koleksiyon-cache). Bulut senkron yükünden kaçınmak için çalışma alanı dışında tutulur")
+    p.add_argument("--workdir", required=True, help="Private working folder (state.json, config.json, spreadsheet)")
+    p.add_argument("--cachedir", help="Location of media/ and frames/ (default: config cache_dir or "
+                   "~/Desktop/insta-koleksiyon-cache). Kept outside the working folder to avoid cloud sync load")
     return p
 
 
 def cache_dir(args, workdir: Path, cfg: dict | None = None) -> Path:
-    """Ağır dosyaların (media/, frames/) kökü. Öncelik: --cachedir > config cache_dir > masaüstü varsayılanı."""
+    """Root of the heavy files (media/, frames/). Priority: --cachedir > config cache_dir > desktop default."""
     cfg = cfg if cfg is not None else load_config(workdir)
     raw = args.cachedir or cfg.get("cache_dir") or "~/Desktop/insta-koleksiyon-cache"
     path = Path(raw).expanduser().resolve()
     if path == workdir.resolve() or workdir.resolve() in path.parents:
-        sys.exit("HATA: cachedir çalışma alanının içinde olamaz (amaç ağır dosyaları çalışma alanından ayırmak).")
+        sys.exit("ERROR: cachedir cannot be inside the working folder (the point is to keep heavy files out of it).")
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -56,7 +56,7 @@ def load_config(workdir: Path) -> dict:
 
 
 def load_taxonomy(workdir: Path) -> dict:
-    """Çalışma alanındaki taxonomy.json varsa varsayılanı ezer."""
+    """A taxonomy.json in the working folder overrides the default."""
     custom = workdir / "taxonomy.json"
     return load_json(custom if custom.exists() else SKILL_DIR / "taxonomy.default.json")
 
@@ -66,7 +66,7 @@ def state_path(workdir: Path) -> Path:
 
 
 class State(dict):
-    """state.json içeriği + yüklendiği andaki anlık görüntü (save_state yalnız DEĞİŞENLERİ yazar)."""
+    """Contents of state.json + a snapshot taken at load time (save_state writes only what CHANGED)."""
     _snap: dict = {}
 
 
@@ -81,11 +81,11 @@ def load_state(workdir: Path) -> State:
 
 
 def save_state(workdir: Path, state: dict) -> None:
-    """Birleştirmeli, kilitli, atomik yazım.
+    """Merging, locked, atomic write.
 
-    Dosya kilidi altında diskteki güncel state okunur; yalnız bu süreçte DEĞİŞEN alanlar (yüklenme anına göre fark) üstüne
-    yazılır. Böylece aynı anda çalışan iki betik (ör. OCR + konuşma) birbirinin alanını ezmez (ör. zincir
-    çalışırken elle yazılan bir alan kaybolmaz). Yazımdan sonra geri okunup doğrulanır.
+    Under a file lock the current state on disk is read; only the fields CHANGED by this process (relative to load time)
+    are written on top of it. Two scripts running at the same time (e.g. OCR + speech) therefore never overwrite each
+    other's fields (e.g. a field written by hand while a chain is running is not lost). The file is read back and checked.
     """
     snap = getattr(state, "_snap", {}).get("posts", {})
     path = state_path(workdir)
@@ -96,7 +96,7 @@ def save_state(workdir: Path, state: dict) -> None:
         dposts = disk.setdefault("posts", {})
         for code, post in state["posts"].items():
             base = snap.get(code)
-            if base is None:  # bu süreçte eklenen yeni post
+            if base is None:  # post added by this process
                 dposts[code] = copy.deepcopy(post)
                 continue
             target = dposts.setdefault(code, {})
@@ -114,9 +114,9 @@ def save_state(workdir: Path, state: dict) -> None:
         tmp.replace(path)
         back = json.loads(path.read_text(encoding="utf-8"))
         if len(back.get("posts", {})) != len(disk["posts"]):
-            raise RuntimeError("state.json yazım doğrulaması başarısız (kayıt sayısı tutmuyor)")
+            raise RuntimeError("state.json write check failed (record count does not match)")
         state._snap = copy.deepcopy({"posts": {c: copy.deepcopy(p) for c, p in state["posts"].items()}})
-        # diskte başkalarının eklediği alanlar bellekte yok; snapshot'ı da bellek durumuyla tutarlı bırak
+        # fields added on disk by others are not in memory; keep the snapshot consistent with the in-memory state
         for c, p in back["posts"].items():
             if c not in state["posts"]:
                 state["posts"][c] = copy.deepcopy(p)
@@ -126,7 +126,7 @@ def save_state(workdir: Path, state: dict) -> None:
 def shortcode(url: str) -> str:
     m = re.search(r"instagram\.com/(?:[^/]+/)?(?:p|reel|reels|tv)/([A-Za-z0-9_-]+)", url)
     if not m:
-        raise ValueError(f"Gönderi URL'si tanınmadı: {url}")
+        raise ValueError(f"Post URL not recognised: {url}")
     return m.group(1)
 
 
@@ -138,17 +138,17 @@ def polite_sleep(cfg: dict) -> None:
 def need_tool(name: str) -> str:
     path = shutil.which(name)
     if not path:
-        sys.exit(f"HATA: '{name}' kurulu değil (README -> Kurulum).")
+        sys.exit(f"ERROR: '{name}' is not installed (see README -> Requirements).")
     return path
 
 
 def advance(post: dict, stage: str) -> None:
-    """Aşamayı yalnız ileri taşır, asla geri almaz."""
+    """Moves the stage forward only, never back."""
     if STAGES.index(stage) > STAGES.index(post.get("stage", "listed")):
         post["stage"] = stage
 
 
 def workers(cfg: dict | None = None) -> int:
-    """Paralel işçi sayısı: config 'workers' veya (CPU çekirdeği - 2), en az 2."""
+    """Number of parallel workers: config 'workers' or (CPU cores - 2), at least 2."""
     n = (cfg or {}).get("workers") or max((os.cpu_count() or 4) - 2, 2)
     return int(n)

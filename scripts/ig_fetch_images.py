@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Chrome'dan indirilen ig_images_<kod>.json dosyalarındaki görsel URL'lerini media/<kod>/NN.jpg olarak kaydeder.
+"""Saves the image URLs from ig_images_<code>.json files (taken from Chrome) as media/<code>/NN.jpg.
 
-Carousel/foto postlar için (yt-dlp resimli postu indiremez). JSON'u Chrome sayfa içinden bir Blob olarak indirir
-(SKILL.md adım 3b; Blob indirmesi engelliyse sayfadaki bir düğmeyi gerçek tıklamayla çalıştırıp JSON'u panoya yazdır, `pbpaste > ~/Downloads/ig_images_<kod>.json`); URL'ler imzalıdır, çerez gerekmez. İşlenen JSON dosyası silinir.
+For carousel/photo posts (yt-dlp cannot download image posts). The JSON comes from the page via the clipboard
+(SKILL.md step 3b: a button injected into the page, a real mouse click, then `pbpaste > ~/Downloads/ig_images_<code>.json`).
+The URLs are signed, no cookies needed. Each processed JSON file is deleted.
 """
 from __future__ import annotations
 
@@ -26,7 +27,7 @@ def main() -> None:
         code = data["code"]
         post = state["posts"].get(code)
         if not post:
-            print("state'te yok, atlandı:", code)
+            print("not in state, skipped:", code)
             continue
         out = cd / "media" / code
         out.mkdir(parents=True, exist_ok=True)
@@ -40,12 +41,12 @@ def main() -> None:
         for src, dst in (("caption", "caption"), ("handle", "account"), ("date_text", "date_text")):
             if data.get(src) and not post.get(dst):
                 post[dst] = data[src]
-        post["type"] = post.get("type") or ("Carousel" if len(files) > 1 else "Foto")
+        post["type"] = post.get("type") or ("Carousel" if len(files) > 1 else "Photo")
         post.pop("error", None)
         advance(post, "media")
         save_state(wd, state)
         jf.unlink()
-        print(code, len(files), "görsel")
+        print(code, len(files), "images")
 
 
 if __name__ == "__main__":

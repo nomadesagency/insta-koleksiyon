@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""İnceleme panosu: 'GÖZDEN GEÇİR' postlar için tek görselde 8 kare (ilk 2 + eşit aralıklı 6) + metin özeti.
+"""Review board: 8 frames in one image (first 2 + 6 evenly spaced) + a text summary, for posts that need review.
 
-Başlıklar çoğunlukla videonun başında çıktığı için ilk iki kare her zaman dahildir.
-Kullanım: ig_board.py --workdir W --pending   (bekleyen TÜM postlar: işaretli + OTO, tek seferde)   |   --batch 0 --size 5 (yalnız işaretliler)   |   --codes A,B
-Çıktı: frames/<kod>/_board.jpg + terminalde OCR/altyazı/konuşma özeti. Panoları inceleyen kişi ya da ajan görsel olarak okur.
+Titles usually appear at the start of a video, so the first two frames are always included.
+Usage: ig_board.py --workdir W --pending   (ALL pending posts: flagged + AUTO, in one go)   |   --batch 0 --size 5 (flagged only)   |   --codes A,B
+Output: frames/<code>/_board.jpg + an OCR/subtitle/speech summary in the terminal. The reviewer (you or an agent) reads the boards visually.
 """
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ def make_board(wd: Path, code: str, frames: list, cols: int = 4, w: int = 300, p
 def main() -> None:
     p = base_parser(__doc__)
     p.add_argument("--codes")
-    p.add_argument("--pending", action="store_true", help="İncelemesi bitmemiş (stage != done) tüm postlar; OTO dahil")
+    p.add_argument("--pending", action="store_true", help="All posts whose review is not finished (stage != done); AUTO included")
     p.add_argument("--batch", type=int, default=0)
     p.add_argument("--size", type=int, default=5)
     args = p.parse_args()
@@ -55,32 +55,32 @@ def main() -> None:
     elif args.pending:
         codes = [c for c, v in sorted(posts.items(), key=lambda kv: kv[1].get("order", 0))
                  if v.get("frames") and v.get("stage") != "done"]
-        print(f"inceleme bekleyen: {len(codes)} post")
+        print(f"pending review: {len(codes)} posts")
     else:
         todo = [c for c, v in sorted(posts.items(), key=lambda kv: kv[1].get("order", 0))
-                if v.get("text_status") == "GÖZDEN GEÇİR" and v.get("frames")]
+                if v.get("text_status") == "REVIEW" and v.get("frames")]
         codes = todo[args.batch * args.size:(args.batch + 1) * args.size]
-        print(f"kalan GÖZDEN GEÇİR: {len(todo)}  bu parti: {len(codes)}")
+        print(f"REVIEW remaining: {len(todo)}  this batch: {len(codes)}")
     for c in codes:
         v = posts[c]
         if not v.get("frames"):
-            print("=====", c, "kare yok")
+            print("=====", c, "no frames")
             continue
         print(f"===== {c} @{v.get('account')} {v.get('type')} {round(v.get('duration') or 0)}s")
-        if v.get("type") in ("Carousel", "Foto"):
-            # carousel: her slayt okunmalı, 6'şar slayt, büyük
+        if v.get("type") in ("Carousel", "Photo"):
+            # carousel: every slide must be read, 6 slides per board, larger
             fr = v["frames"]
             for k in range(0, len(fr), 6):
                 print("BOARD:", make_board(cd, c, fr[k:k + 6], cols=3, w=400, pick_all=True, name=f"_slides_{k // 6 + 1}.jpg"))
         else:
             print("BOARD:", make_board(cd, c, v["frames"]))
-        print("AÇIKLAMA:", (v.get("caption") or "")[:160].replace("\n", " / "))
-        print("KALAN OCR:", (v.get("screen_text") or "(boş)")[:500].replace("\n", " | "))
-        print("ALTYAZI SAYILAN:", " | ".join(v.get("subtitle_lines", []))[:200])
+        print("CAPTION:", (v.get("caption") or "")[:160].replace("\n", " / "))
+        print("OCR LEFT:", (v.get("screen_text") or "(empty)")[:500].replace("\n", " | "))
+        print("COUNTED AS SUBTITLE:", " | ".join(v.get("subtitle_lines", []))[:200])
         flag = ""
         if v.get("speech_suspect"):
-            flag = f"  [ŞÜPHELİ: şarkı sözü olabilir; ses={v.get('audio_type') or '?'} {v.get('music_title') or ''}]"
-        print("KONUŞMA:", (v.get("speech_text") or "(yok)")[:160].replace("\n", " ") + flag)
+            flag = f"  [SUSPECT: may be song lyrics; audio={v.get('audio_type') or '?'} {v.get('music_title') or ''}]"
+        print("SPEECH:", (v.get("speech_text") or "(none)")[:160].replace("\n", " ") + flag)
 
 
 if __name__ == "__main__":

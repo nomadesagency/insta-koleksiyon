@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Karelerden görsel üstü metni tesseract ile okur (toplu geçiş).
+"""Reads on-screen text from frames with tesseract (bulk pass).
 
-Her kare düz + ters renk (açık yazı/koyu zemin) denenir, güveni yüksek olan alınır. Kareler arası tekrar eden
-satırlar elenir. Güven eşiğin altındaysa veya hiç metin çıkmadıysa post 'GÖZDEN GEÇİR' işaretlenir:
-İnceleyen (sen ya da ajan) kontak sayfasını (post['sheet']) görsel okuyup `ig_state.py set` ile düzeltir.
+Each frame is read plain and, if needed, inverted (light text on dark background); the more confident result wins.
+Lines repeated across frames are merged. If confidence is below the threshold or no text is found, the post is marked
+'REVIEW': the reviewer (you or an agent) reads the contact sheet (post['sheet']) and corrects it with `ig_state.py set`.
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ UPSCALE_BELOW = int(os.environ.get("IG_OCR_UPSCALE_BELOW", 600))
 
 
 def run_tsv(tess: str, img: Image.Image, lang: str):
-    """[(satır_metni, satır_ortalama_güven)] döndürür."""
+    """Returns [(line_text, mean_line_confidence)]."""
     with tempfile.NamedTemporaryFile(suffix=".png") as tmp:
         img.save(tmp.name)
         r = subprocess.run([tess, tmp.name, "stdout", "-l", lang, "--psm", "6", "tsv"],
@@ -51,20 +51,20 @@ def run_tsv(tess: str, img: Image.Image, lang: str):
 
 
 def looks_like_text(text: str, conf: float, min_conf: float) -> bool:
-    """Gürültüyü ele: düşük güven, az harf, tek karakterlik kırıntılar."""
+    """Filter noise: low confidence, few letters, single-character fragments."""
     letters = sum(ch.isalpha() for ch in text)
     words = [w for w in text.split() if sum(ch.isalpha() for ch in w) >= 2]
     return conf >= min_conf and letters >= 3 and letters / max(len(text.replace(" ", "")), 1) >= 0.6 and len(words) >= 1
 
 
 def ocr_frame(tess: str, path: Path, lang: str, min_conf: float):
-    """Düz kare önce okunur; ters renk (açık yazı/koyu zemin) yalnız düz okuma zayıfsa denenir (iş yükünü ~yarıya indirir)."""
+    """The plain frame is read first; the inverted one (light text on dark) only if the plain read is weak (roughly halves the work)."""
     img = Image.open(path).convert("L")
-    if min(img.size) < UPSCALE_BELOW:  # 720x1280 video karesi büyütülmez (2 kat büyütme OCR süresini ~3 kat artırıyordu)
+    if min(img.size) < UPSCALE_BELOW:  # 720x1280 video frames are not upscaled (2x upscaling made OCR ~3x slower)
         img = img.resize((img.width * 2, img.height * 2), Image.LANCZOS)
     plain = [(t, c) for t, c in run_tsv(tess, img, lang) if looks_like_text(t, c, min_conf)]
     if len(plain) >= 2 and sum(c for _, c in plain) / len(plain) >= 80:
-        return plain  # yeterince güçlü: ters renge gerek yok
+        return plain  # strong enough: no need for the inverted pass
     inv = [(t, c) for t, c in run_tsv(tess, ImageOps.invert(img), lang) if looks_like_text(t, c, min_conf)]
     return max((plain, inv), key=lambda g: sum(c for _, c in g))
 
@@ -78,8 +78,8 @@ def norm(s: str) -> str:
 
 
 def merge_lines(frame_lines: list, min_frames: int) -> list:
-    """frame_lines: kare başına [(metin, güven)]. Benzer satırlar kümelenir; küme en az min_frames karede
-    görünmeli (ekran metni birkaç saniye durur, doku gürültüsü tek karede kalır)."""
+    """frame_lines: [(text, confidence)] per frame. Similar lines are clustered; a cluster must appear in at least
+    min_frames frames (on-screen text stays for a few seconds, texture noise stays in a single frame)."""
     clusters = []  # {"text","key","frames":set,"conf"}
     for fi, lines in enumerate(frame_lines):
         for text, conf in lines:
@@ -107,7 +107,7 @@ def main() -> None:
     tess = need_tool("tesseract")
     min_conf = cfg["ocr_line_min_confidence"]
 
-    with ProcessPoolExecutor(max_workers=workers(cfg)) as pool:  # kareler paralel; tesseract tek iş parçacıklı
+    with ProcessPoolExecutor(max_workers=workers(cfg)) as pool:  # frames in parallel; tesseract is single-threaded
         for code, post in state["posts"].items():
             if not post.get("frames") or "ocr_text" in post:
                 continue
@@ -120,16 +120,16 @@ def main() -> None:
             post["ocr_text"] = "\n".join(merged)
             post["ocr_confidence"] = mean
             if not merged:
-                post["text_status"], post["review_reason"] = "GÖZDEN GEÇİR", "OCR boş: gerçekten metin yok mu doğrula"
+                post["text_status"], post["review_reason"] = "REVIEW", "OCR empty: confirm there is really no text"
             elif mean < cfg["ocr_review_confidence"]:
-                post["text_status"], post["review_reason"] = "GÖZDEN GEÇİR", f"düşük güven {mean}"
+                post["text_status"], post["review_reason"] = "REVIEW", f"low confidence {mean}"
             else:
-                post["text_status"] = "OTO"
-            if post["text_status"] == "OTO":
+                post["text_status"] = "AUTO"
+            if post["text_status"] == "AUTO":
                 post["screen_text"] = post["ocr_text"]
             advance(post, "ocr")
             save_state(wd, state)
-            print(code, post["text_status"], mean, f"{len(merged)} satır", flush=True)
+            print(code, post["text_status"], mean, f"{len(merged)} lines", flush=True)
 
 
 if __name__ == "__main__":

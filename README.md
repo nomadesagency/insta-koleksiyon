@@ -13,7 +13,7 @@ Instagram'da "Kaydedilenler"e attığın postlar bir süre sonra kaybolup gider.
 - konuşma varsa ses transkripti (Whisper)
 - sabit bir taksonomiden otomatik kategori ve en fazla 2 etiket
 
-Araç, tarayıcı kontrolü olan bir yapay zeka ajanıyla (ör. Claude Code + Claude in Chrome) çalışmak üzere tasarlandı. Kaydedilenler listesi özeldir, bu yüzden giriş yapılmış bir Chrome oturumu gerekir. Akışın tamamı [SKILL.md](SKILL.md) dosyasında.
+Araç, tarayıcı kontrolü olan bir yapay zeka ajanıyla (ör. Claude Code + Claude in Chrome) çalışmak üzere tasarlandı. Kaydedilenler listesi özeldir, bu yüzden giriş yapılmış bir Chrome oturumu gerekir. Akışın tamamı [SKILL.md](SKILL.md) dosyasında. Bu README dışındaki tüm dosyalar (belgeler, betik mesajları, Excel sütunları, kategoriler) İngilizcedir.
 
 ### Gereksinimler
 - macOS, Python 3.9+
@@ -24,8 +24,9 @@ Araç, tarayıcı kontrolü olan bir yapay zeka ajanıyla (ör. Claude Code + Cl
 ### Kurulum
 1. Özel bir çalışma klasörü aç (repo dışında). Bu klasörde kullanıcı adın, kaydettiğin postların listesi ve Excel durur. **Asla repoya ekleme.**
 2. `config.example.json` dosyasını `<çalışma-klasörü>/config.json` olarak kopyala, `instagram_username` alanını doldur.
-3. İstersen `taxonomy.default.json` dosyasını `<çalışma-klasörü>/taxonomy.json` olarak kopyalayıp kategorileri kendine göre düzenle. Varsayılan kategoriler içerik üreticileri için hazırlanmış bir örnektir.
+3. İstersen `taxonomy.default.json` dosyasını `<çalışma-klasörü>/taxonomy.json` olarak kopyalayıp kategorileri kendine göre düzenle. Varsayılan kategoriler (İngilizce) içerik üreticileri için hazırlanmış bir örnektir; Türkçe kategori adları da yazabilirsin.
 4. Ağır dosyalar (indirilen medya ve kareler) ayrı bir önbellek klasörüne gider: varsayılan `~/Desktop/insta-koleksiyon-cache`. Değiştirmek için `config.json` içinde `cache_dir` alanını kullan ya da `--cachedir` ver.
+5. OCR dilleri `config.json` → `ocr_languages` (varsayılan `tur+eng`, tesseract dil kodları).
 
 ### Hızlı yol
 ```bash
@@ -33,7 +34,7 @@ S=scripts; W=~/insta-koleksiyon-veri; C=~/Desktop/insta-koleksiyon-cache
 # 1) chrome-snippets.md parça 1 + 2 ile kaydedilenler dökümünü al:  pbpaste > $C/saved-feed.json
 python3 $S/ig_run_batch.py   --workdir $W --feed $C/saved-feed.json --new 50   # indirme, kareler, OCR, konuşma
 python3 $S/ig_board.py       --workdir $W --pending                            # inceleme panoları
-python3 $S/ig_apply.py       --workdir $W < sonuc.json                         # inceleme sonuçları + kategori
+python3 $S/ig_apply.py       --workdir $W < results.json                       # inceleme sonuçları + kategori
 python3 $S/ig_finish_batch.py --workdir $W                                     # Excel + doğrulama + önbellek temizliği
 ```
 50 postluk bir parti, 10 çekirdekli bir makinede yaklaşık 7 dakikada hazırlanır. En uzun adım görsel incelemedir.
@@ -56,7 +57,7 @@ Posts you save on Instagram tend to disappear into the "Saved" list. insta-kolek
 - a speech transcript when there is speech (Whisper)
 - an automatic category from a fixed taxonomy, plus up to 2 tags
 
-It is built to be driven by an AI agent with browser control (for example Claude Code with Claude in Chrome). The Saved list is private, so a logged-in Chrome session is required. The full workflow is in [SKILL.md](SKILL.md) (Turkish).
+It is built to be driven by an AI agent with browser control (for example Claude Code with Claude in Chrome). The Saved list is private, so a logged-in Chrome session is required. The full workflow is in [SKILL.md](SKILL.md).
 
 ### Requirements
 - macOS, Python 3.9+
@@ -67,8 +68,9 @@ It is built to be driven by an AI agent with browser control (for example Claude
 ### Setup
 1. Create a private working folder outside the repository. It holds your username, the list of your saved posts and the spreadsheet. **Never commit it.**
 2. Copy `config.example.json` to `<workdir>/config.json` and set `instagram_username`.
-3. Optionally copy `taxonomy.default.json` to `<workdir>/taxonomy.json` and edit the categories. The default categories (in Turkish) are an example aimed at content creators.
+3. Optionally copy `taxonomy.default.json` to `<workdir>/taxonomy.json` and edit the categories. The default categories are an example aimed at content creators.
 4. Heavy files (downloaded media and extracted frames) go to a separate cache folder, `~/Desktop/insta-koleksiyon-cache` by default. Change it with `cache_dir` in `config.json` or `--cachedir`.
+5. OCR languages: `ocr_languages` in `config.json` (default `tur+eng`, tesseract language codes; e.g. `eng` for English only).
 
 ### Fast path
 ```bash

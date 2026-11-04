@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Ses izi + konuşma tespiti; konuşma varsa Whisper (faster-whisper) transkripti.
+"""Audio track + speech detection; a Whisper (faster-whisper) transcript when there is speech.
 
-Müzik-only videolar: VAD süzgeci konuşma segmenti bulmazsa 'konuşma yok' sayılır.
-Yalnız video medyası olan postlar işlenir.
+Music-only videos: if the VAD filter finds no speech segment, the post counts as 'no speech'.
+Only posts with video media are processed.
 """
 from __future__ import annotations
 
@@ -30,12 +30,12 @@ _MODEL = None
 
 def _init_worker(model_name: str, threads: int) -> None:
     global _MODEL
-    from faster_whisper import WhisperModel  # geç içe aktarım: kurulu değilse yalnız burada hata
+    from faster_whisper import WhisperModel  # late import: fails only here if not installed
     _MODEL = WhisperModel(model_name, compute_type="int8", cpu_threads=threads)
 
 
 def analyze(code: str, video: str, ffmpeg: str, cfg: dict, duration: float, audio_type):
-    """Tek postun sesini çözümler (işçi süreçte). (kod, alanlar sözlüğü, ses seviyesi dB) döndürür."""
+    """Analyses the audio of one post (in a worker process). Returns (code, fields dict, mean volume dB)."""
     path = Path(video)
     vol = mean_volume_db(ffmpeg, path)
     if vol is None or vol < cfg["audio_min_mean_volume_db"]:
@@ -45,9 +45,9 @@ def analyze(code: str, video: str, ffmpeg: str, cfg: dict, duration: float, audi
     segs = list(segs)
     text = " ".join(s.text.strip() for s in segs).strip()
     has = len(text) >= cfg["speech_min_chars"]
-    # Şarkı sözü yanlış alarmı (denemede 57 postun 14'ünde): ses türü lisanslı müzikse, dil güveni düşükse ya da
-    # konuşma süresi videonun küçük bir kısmıysa 'şüpheli' işaretlenir; inceleme panosu bunu gösterir.
-    # (Lisanslı müzik etiketi tek başına eleme sebebi DEĞİL: müzik üstüne gerçek seslendirme yapılan postlar da var.)
+    # Song-lyrics false alarm (14 of 57 posts in a test run): flagged 'suspect' if the audio type is licensed music,
+    # language confidence is low, or speech covers only a small part of the video; the review board shows the flag.
+    # (The licensed-music label alone is NOT a reason to drop speech: some posts have real voice-over on top of music.)
     spoken = sum(s.end - s.start for s in segs)
     suspect = bool(has and (audio_type == "licensed_music" or info.language_probability < 0.6
                             or (duration and spoken / duration < 0.3)))
@@ -73,7 +73,7 @@ def main() -> None:
         jobs.append((code, str(videos[0]), post.get("duration") or 0, post.get("audio_type")))
     save_state(wd, state)
 
-    # Whisper iş parçacığı sayısı artınca verim doymaz: birkaç süreç x az iş parçacığı daha hızlıdır
+    # Whisper does not scale with more threads: a few processes x few threads is faster
     n = max(min(cfg.get("speech_workers", 3), len(jobs)), 1)
     threads = max((workers(cfg) + 2) // n, 2)
     with ProcessPoolExecutor(max_workers=n, initializer=_init_worker, initargs=(cfg["speech_model"], threads)) as pool:
@@ -82,7 +82,7 @@ def main() -> None:
             code, fields, vol = f.result()
             state["posts"][code].update(fields)
             save_state(wd, state)
-            print(code, "konuşma var" if fields["has_speech"] else "konuşma yok", vol, flush=True)
+            print(code, "speech" if fields["has_speech"] else "no speech", vol, flush=True)
 
 
 if __name__ == "__main__":

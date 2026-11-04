@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Biten postların media/ ve frames/ klasörlerini siler; Excel + state.json yeterlidir (URL'ler duruyor).
+"""Deletes the media/ and frames/ folders of finished posts; the spreadsheet + state.json are enough (URLs remain).
 
-Yalnız aşaması 'done' olan postlar silinir (varsayılan: kuru çalıştırma, --apply ile gerçekten siler).
-Silinen post state'te `media_purged: true` alır; ig_download.py onu yeniden indirmez.
-Hem --cachedir hem (eski kurulumdan kalan) --workdir altındaki media/frames temizlenir.
+Only posts at stage 'done' are deleted (default: dry run, --apply actually deletes).
+A deleted post gets `media_purged: true` in state; ig_download.py does not download it again.
+media/frames under both --cachedir and (left over from an older setup) --workdir are cleaned.
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ def tree_size(path: Path) -> int:
 
 def main() -> None:
     p = base_parser(__doc__)
-    p.add_argument("--apply", action="store_true", help="Gerçekten sil (yoksa yalnız rapor)")
+    p.add_argument("--apply", action="store_true", help="Really delete (otherwise report only)")
     args = p.parse_args()
     wd = Path(args.workdir)
     cd = cache_dir(args, wd)
@@ -42,16 +42,16 @@ def main() -> None:
             for t in existing:
                 shutil.rmtree(t)
             post["media_purged"] = True
-            for k in ("frames", "sheet", "media"):  # state şişmesin: yolların işi bitti (5000 post ≈ MB düzeyi fark)
+            for k in ("frames", "sheet", "media"):  # keep state small: the paths are no longer needed (MBs over 5000 posts)
                 post.pop(k, None)
     if args.apply:
         save_state(wd, state)
-        for root in {cd, wd}:  # boşalan üst klasörleri toparla
+        for root in {cd, wd}:  # remove parent folders that are now empty
             for sub in ("media", "frames"):
                 d = root / sub
                 if d.exists() and not any(d.iterdir()):
                     d.rmdir()
-    print(f"{'silindi' if args.apply else 'silinecek (kuru çalıştırma)'}: {count} post, {total / 1e9:.2f} GB")
+    print(f"{'deleted' if args.apply else 'would delete (dry run)'}: {count} posts, {total / 1e9:.2f} GB")
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Postların medyasını yt-dlp ile indirir (tarayıcı çerezleriyle). İdempotent: media/<kod>/ doluysa atlar.
+"""Downloads post media with yt-dlp (using browser cookies). Idempotent: skips when media/<code>/ is not empty.
 
-İndiremeyen post `error` alanıyla işaretlenir; yedek yol: Chrome'da ekran görüntüsü (SKILL.md).
+A post that cannot be downloaded is marked with an `error` field; fallback: the feed import (ig_import_feed.py).
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ MEDIA_EXT = {".mp4", ".mov", ".webm", ".mkv", ".jpg", ".jpeg", ".png", ".webp"}
 
 
 def fill_meta(post: dict, out_dir: Path) -> None:
-    """yt-dlp bilgi dosyasından açıklama/hesap/tarih/süre; Chrome'dan gelen değerleri ezmez."""
+    """Caption/account/date/duration from the yt-dlp info file; never overwrites values that came from Chrome."""
     infos = sorted(out_dir.glob("*.info.json"))
     if not infos:
         return
@@ -23,7 +23,7 @@ def fill_meta(post: dict, out_dir: Path) -> None:
     d = info.get("upload_date") or ""
     fields = {
         "caption": info.get("description"),
-        "account": info.get("channel") or info.get("uploader"),  # uploader_id sayısal ID'dir, kullanılmaz
+        "account": info.get("channel") or info.get("uploader"),  # uploader_id is a numeric ID, not used
         "date": f"{d[:4]}-{d[4:6]}-{d[6:8]}" if len(d) == 8 else None,
         "type": "Reel" if info.get("duration") else None,
         "duration": info.get("duration"),
@@ -35,8 +35,8 @@ def fill_meta(post: dict, out_dir: Path) -> None:
 
 def main() -> None:
     p = base_parser(__doc__)
-    p.add_argument("--code", help="Yalnız bu post")
-    p.add_argument("--force", action="store_true", help="Carousel/foto postları da yt-dlp ile dene")
+    p.add_argument("--code", help="This post only")
+    p.add_argument("--force", action="store_true", help="Also try carousel/photo posts with yt-dlp")
     args = p.parse_args()
     wd = Path(args.workdir)
     cfg, state = load_config(wd), load_state(wd)
@@ -47,9 +47,9 @@ def main() -> None:
     for code, post in state["posts"].items():
         if args.code and code != args.code:
             continue
-        if post.get("media_purged"):  # ig_cleanup.py ile bilerek silindi, yeniden indirilmez
+        if post.get("media_purged"):  # deliberately deleted by ig_cleanup.py, not downloaded again
             continue
-        if post.get("type") in ("Carousel", "Foto") and not args.force:  # yt-dlp resimli postu indiremez (ig_import_feed.py)
+        if post.get("type") in ("Carousel", "Photo") and not args.force:  # yt-dlp cannot download image posts (ig_import_feed.py)
             continue
         out_dir = cd / "media" / code
         existing = [f for f in out_dir.glob("*") if f.suffix.lower() in MEDIA_EXT] if out_dir.exists() else []
@@ -65,7 +65,7 @@ def main() -> None:
         r = subprocess.run(cmd, capture_output=True, text=True)
         files = [f for f in out_dir.glob("*") if f.suffix.lower() in MEDIA_EXT]
         if r.returncode != 0 or not files:
-            post["error"] = (r.stderr.strip().splitlines() or ["indirilemedi"])[-1][:300]
+            post["error"] = (r.stderr.strip().splitlines() or ["download failed"])[-1][:300]
             failed += 1
         else:
             post.pop("error", None)
@@ -75,7 +75,7 @@ def main() -> None:
             done += 1
         save_state(wd, state)
         polite_sleep(cfg)
-    print(f"indirildi={done} hata={failed}")
+    print(f"downloaded={done} errors={failed}")
 
 
 if __name__ == "__main__":

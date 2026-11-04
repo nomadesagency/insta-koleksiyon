@@ -1,80 +1,80 @@
 ---
 name: insta-koleksiyon
 description: >
-  Instagram "Kaydedilenler" listesindeki postların açıklamasını, görsel üstü metin dökümünü (altyazı değil)
-  ve varsa konuşma transkriptini toplar, sabit taksonomiyle kategorileyip tek Excel'e yazar. Tarayıcı aracı
-  olan bir ajanla çalışır (Instagram'a giriş yapılmış Chrome oturumu gerekir).
+  Collects the caption, the on-screen text (not subtitles) and, when there is speech, the speech transcript of the
+  posts in your Instagram "Saved" list, categorises them with a fixed taxonomy and writes everything to one
+  spreadsheet. Runs with an agent that has browser tools (needs a Chrome session logged in to Instagram).
 ---
 
 # insta-koleksiyon
 
-Bu klasörde kişisel veri TUTULMAZ. Küçük dosyalar (`state.json`, `config.json`, Excel) `--workdir` ile verilen özel çalışma alanındadır. **Ağır dosyalar (`media/`, `frames/`) çalışma alanına girmez:** `--cachedir` ile ayrı yerde tutulur (varsayılan `~/Desktop/insta-koleksiyon-cache`, `config.json` → `cache_dir` ile değiştirilir). Cachedir çalışma alanının içinde olamaz; betik reddeder. Böylece çalışma alanı bir bulut klasöründeyse senkron yükü küçük kalır. Bu klasör olduğu gibi paylaşılabilir kalmalıdır: kullanıcı adı, yol, token, e-posta yazılmaz.
+NO personal data is kept in this folder. Small files (`state.json`, `config.json`, spreadsheet) live in the private working folder given with `--workdir`. **Heavy files (`media/`, `frames/`) never go into the working folder:** they are kept elsewhere with `--cachedir` (default `~/Desktop/insta-koleksiyon-cache`, change it with `cache_dir` in `config.json`). The cache cannot be inside the working folder; the scripts refuse it. This keeps sync load small when the working folder is in a cloud drive. This folder must stay shareable as it is: no usernames, paths, tokens or e-mail addresses are written into it.
 
-## Kapsam kuralları
-- "Transkript" = görsel üstü metin dökümü. **Yanık altyazı (konuşmayı kelime kelime yazan metin) dahil edilmez.** Konuşma varsa ses transkripti AYRI sütundadır.
-- **Ayrım kuralı:** tasarlanmış ekran metni (başlık, sahne başlığı, diyagram etiketi, vurgulu cümle) dahil; konuşmayı senkron yazan 1-4 kelimelik altyazı hariç. Müzik eşliğinde yalnız söz/metinden oluşan videoda (şarkı sözü yazısı) söz metni dahil.
-- **Medya yeri ve temizlik:** indirilen video/görsel/kareler önbellek klasörüne yazılır; kalıcı çıktı yalnız `state.json` + Excel'dir. Başarılı her turdan sonra önbellek **silinir** (`ig_finish_batch.py`). Medya kalıcı arşiv değildir: gerekirse post URL'sinden bakılır.
-- Önce pilot (son 10-20 post), sonuç beğenilince tam koşu.
-- Metin: toplu OCR + şüpheli olanları inceleyen (sen ya da ajan) görsel okuyup düzeltir (karma). Resimli postlarda doğrudan görsel okuma.
-- Kategori: yalnız postun kendi içeriğinden, sabit taksonomiyle. Serbest etiket üretilmez.
+## Scope rules
+- "Transcript" = a dump of the text shown on screen. **Burned-in subtitles (text that writes out the speech word by word) are excluded.** When there is speech, the audio transcript goes into a SEPARATE column.
+- **Dividing rule:** designed on-screen text (titles, scene titles, diagram labels, highlighted sentences) is included; 1-4 word subtitles synced to speech are excluded. In a video made only of lyrics/text over music, the lyric text is included.
+- **Media location and cleanup:** downloaded videos/images/frames are written to the cache folder; the only permanent output is `state.json` + the spreadsheet. After every successful batch the cache is **deleted** (`ig_finish_batch.py`). Media is not a permanent archive: when needed, open the post URL.
+- Pilot first (the latest 10-20 posts), then the full run once you are happy with the result.
+- Text: bulk OCR, then the reviewer (you or an agent) reads the doubtful ones visually and corrects them (hybrid). Image posts are read visually.
+- Category: from the post's own content only, using the fixed taxonomy. No free-form tags.
 
-## Ön koşullar
+## Prerequisites
 - `brew install ffmpeg yt-dlp tesseract tesseract-lang` · `python3 -m pip install --user openpyxl pillow faster-whisper`
-- `python3` = bu paketlerin kurulu olduğu yorumlayıcı. Birden çok Python varsa (ör. sistem Python'u ve Homebrew Python'u) paketlerin hangisine kurulduğunu kontrol et.
-- `yt-dlp --cookies-from-browser chrome` ilk çalışmada macOS Anahtar Zinciri izni ister: **Allow** (tek seferlik) yeterli, "Always Allow" önerilmez. İzin pencerelerini kullanıcı onaylar, ajan şifre girmez.
-- Chrome'da Instagram'a giriş açık olmalı.
+- `python3` = the interpreter these packages are installed into. If you have more than one Python (e.g. the system Python and a Homebrew Python), check which one has the packages.
+- `yt-dlp --cookies-from-browser chrome` asks for macOS Keychain access on the first run: **Allow** (one time) is enough, "Always Allow" is not recommended. Permission prompts are approved by the user; the agent never types passwords.
+- Chrome must be logged in to Instagram.
 
-## Hızlı yol (önerilen: parti başına ≈ 7 dk makine + inceleme)
-Kısaltma: `S=<bu klasör>/scripts`, `W=<özel çalışma alanın>`, `C=~/Desktop/insta-koleksiyon-cache`. Chrome parçacıkları: `chrome-snippets.md`.
-1. **Döküm (Chrome, tek sefer ya da süresi dolunca):** `chrome-snippets.md` parça 1 (ilk N sayfa yeter) → parça 2 ile panoya → `pbpaste > $C/saved-feed.json`. Dökümde reel video adresleri, carousel/foto görselleri, açıklama, hesap, tarih, ses türü hazırdır; adresler **birkaç saatte** dolar.
-2. **Parti (tek komut):** `python3 $S/ig_run_batch.py --workdir $W --feed $C/saved-feed.json --new 50` → yeni 50 postu ekler, medyayı **paralel** indirir (yt-dlp/çerez/Anahtar Zinciri yok), kareleri paralel çıkarır, **OCR ve Whisper aynı anda** koşar, altyazıyı ayıklar, süreleri ve bekleyen sayısını yazar. Yarıda kalırsa aynı komut devam eder.
-3. **İnceleme (atlanamaz):** `python3 $S/ig_board.py --workdir $W --pending` bekleyen TÜM postların (işaretli + OTO) panolarını ve metin özetini tek seferde üretir. Panoları paralel oku, sonuçları `python3 $S/ig_apply.py --workdir $W < sonuc.json` ile yaz (kategori harf kodu A..M: `ig_apply.py --letters`). `[ŞÜPHELİ: şarkı sözü olabilir]` etiketi: panoda konuşan yüz yoksa `has_speech:false` yaz.
-4. **Turu bitir + temizle (tek komut):** `python3 $S/ig_finish_batch.py --workdir $W`. Sırasıyla Excel'i üretir, state ile hücre hücre doğrular (`verify_xlsx.py`), **yalnız başarılıysa** önbellekteki `media/` + `frames/` klasörlerini siler. Şu durumlarda **hiçbir şey silinmez**: `done` olmayan post var, Excel state ile tutmuyor, kategori taksonomide yok. Bir sonraki turdan önce önbellek boş olmalıdır.
+## Fast path (recommended: ≈ 7 min machine time per batch + review)
+Shorthand: `S=<this folder>/scripts`, `W=<your private working folder>`, `C=~/Desktop/insta-koleksiyon-cache`. Chrome snippets: `chrome-snippets.md`.
+1. **Dump (Chrome, once, or again when it expires):** `chrome-snippets.md` snippet 1 (the first N pages are enough) → snippet 2 to the clipboard → `pbpaste > $C/saved-feed.json`. The dump already contains reel video URLs, carousel/photo images, caption, account, date and audio type; the URLs expire **within a few hours**.
+2. **Batch (one command):** `python3 $S/ig_run_batch.py --workdir $W --feed $C/saved-feed.json --new 50` → adds the next 50 posts, downloads media **in parallel** (no yt-dlp/cookies/Keychain), extracts frames in parallel, runs **OCR and Whisper at the same time**, strips subtitles, prints durations and the number of posts pending review. If interrupted, the same command resumes.
+3. **Review (mandatory):** `python3 $S/ig_board.py --workdir $W --pending` builds the boards and the text summary for ALL pending posts (flagged + AUTO) in one go. Read the boards in parallel and write the results with `python3 $S/ig_apply.py --workdir $W < results.json` (category letter codes A..M: `ig_apply.py --letters`). `[SUSPECT: may be song lyrics]` label: if nobody is speaking on the board, write `has_speech:false`.
+4. **Finish the batch + clean up (one command):** `python3 $S/ig_finish_batch.py --workdir $W`. In order: builds the spreadsheet, compares it with state cell by cell (`verify_xlsx.py`), and **only if that succeeds** deletes the `media/` + `frames/` folders in the cache. **Nothing is deleted** when: a post is not `done`, the spreadsheet does not match state, or a category is not in the taxonomy. The cache should be empty before the next batch.
 
-Ölçülen süreler (30 gerçek post, 10 çekirdek): eski hat 524 sn → yeni hat 226 sn (medya 42, kareler 11, OCR‖konuşma 173). Kalan tek büyük kalem **görsel inceleme**: aşağıdaki "Hız notları".
+Measured durations (30 real posts, 10 cores): old pipeline 524 s → new pipeline 226 s (media 42, frames 11, OCR‖speech 173). The only big item left is the **visual review**: see "Speed notes" below.
 
-## Hız notları
-- **OCR 237 → 96 sn:** 720×1280 video karesi 2 kat büyütülmez (`IG_OCR_UPSCALE_BELOW`, 600) ve ters renk geçişi yalnız düz okuma zayıfsa (satır ort. güveni < 80) denenir. Kalite aynı kaldı.
-- **Whisper 363 → 148 sn:** `beam_size=1`, 3 süreç × az iş parçacığı (`speech_workers`), `condition_on_previous_text=False`. Transkript benzerliği medyan 0,93 (farklar yazım: "150.000"/"150 bin").
-- **Uzun videoda yarım kare sıklığı:** `long_video_seconds` (45) üstü videolarda `frame_fps_long` (0,5).
-- **state yazımı kilitli ve birleştirmeli:** iki betik ya da elle yazım aynı anda güvenle çalışır. Binlerce postluk state'te şişmemesi için `ig_cleanup` biten postların `frames/sheet/media` yollarını da siler.
-- **Hala yavaş olan:** görsel inceleme (50 post ≈ 50 pano okuma). Standart: işaretli + otomatik geçen HEPSİ okunur (bir denemede otomatik geçen 12 postun 12'sinde de ekran metni eksik/yanlış çıktı). Zamanı kısaltmak için panoları 10-12'şer paralel oku, sonuçları tek `ig_apply` çağrısında yaz.
+## Speed notes
+- **OCR 237 → 96 s:** 720×1280 video frames are no longer upscaled 2x (`IG_OCR_UPSCALE_BELOW`, 600), and the inverted-colour pass runs only when the plain read is weak (mean line confidence < 80). Quality stayed the same.
+- **Whisper 363 → 148 s:** `beam_size=1`, 3 processes × few threads (`speech_workers`), `condition_on_previous_text=False`. Median transcript similarity 0.93 (differences are spelling only, e.g. "150,000"/"150 thousand").
+- **Half frame rate for long videos:** above `long_video_seconds` (45), `frame_fps_long` (0.5) is used.
+- **State writes are locked and merging:** two scripts, or a script and a hand edit, can write at the same time safely. To keep a state with thousands of posts small, `ig_cleanup` also removes the `frames/sheet/media` paths of finished posts.
+- **Still slow:** the visual review (50 posts ≈ 50 boards). Standard: flagged + auto-passed posts are ALL read (in one test run, all 12 auto-passed posts had missing or wrong on-screen text). To save time, read the boards 10-12 at a time in parallel and write the results in a single `ig_apply` call.
 
-## Akış (ayrıntılı, adım adım; hızlı yol bunların birleşimidir)
-`media/` ve `frames/` okuyan/yazan betikler (`ig_download`, `ig_fetch_images`, `ig_frames`, `ig_ocr`, `ig_speech`, `ig_board`, `ig_cleanup`) önbellek klasörünü kendileri çözer; elle `--cachedir` yalnız varsayılandan farklı yer için gerekir.
+## Workflow (detailed, step by step; the fast path combines these)
+Scripts that read/write `media/` and `frames/` (`ig_download`, `ig_fetch_images`, `ig_frames`, `ig_ocr`, `ig_speech`, `ig_board`, `ig_cleanup`) resolve the cache folder themselves; pass `--cachedir` only for a non-default location.
 
-1. **Liste (Chrome).** Yeni sekmede `instagram.com/<kullanıcı>/saved/all-posts/` (`/saved/` yalnız koleksiyonları gösterir). Tarayıcı aracıyla `a[href*="/p/"]` hrefleri sırayla topla (Instagram sırası = kaydedilme sırası, en yeni önce). Kaydırmadan yalnız ilk ~21 kart DOM'dadır; tam liste için kaydır. Tür ipucu: kartın `svg[aria-label]` değeri (`Clip`=reel, `Carousel`, boş=foto). `$W/urls.json`'a yaz → `python3 $S/ig_state.py --workdir $W add-list --file $W/urls.json --limit N`
-2. **Video postlar (yedek yol).** Hızlı yolda `ig_import_feed.py` doğrudan adresten indirir; adresi olmayan/süresi dolan reel için `python3 $S/ig_download.py --workdir $W` (yt-dlp: video + `.info.json`; açıklama, hesap=`channel`, tarih, süre otomatik state'e yazılır. `uploader_id` sayısal ID'dir, kullanılmaz). Resimli postta yt-dlp hata verir (beklenen).
-3. **Resimli postlar (carousel/foto): meta.** Sayfa içinden `fetch('/p/<kod>/',{credentials:'include'})` + `og:description`. Biçim değişkendir (`N likes… - hesap on TARİH: "açıklama"` / yalnız açıklama / açıklamasız); bulunamazsa yt-dlp yolu (videolarda) kullanılır. Toplu fetch tarayıcı aracının zaman sınırını aşabilir: işi `window.__x` içinde başlat, sonra yokla.
-   **3b. Resimli postlar: içerik.** Sayfada her slaytı gezip (`button[aria-label="Next"]` tıklaması) görünür büyük `img` URL'lerini topla. Taşıma, öncelik sırasıyla: (a) **Pano yolu (önerilen, izin gerektirmez):** sayfaya bir düğme enjekte et (`position:fixed`), onclick'inde `navigator.clipboard.writeText(JSON)`; düğmeye **gerçek fare tıklaması** yap (JS `click()` pano/indirme için "kullanıcı hareketi" sayılmaz). Sonra terminalde `LANG=en_US.UTF-8 pbpaste > ~/Downloads/ig_images_<kod>.json` (UTF-8 yerel ayarı şart; yoksa Türkçe/emoji bozulur). (b) Blob indirmesi: Chrome'da instagram.com için "otomatik indirme" izni verilmişse çalışır, ama pratikte yalnız ilk dosyayı indirip sonrasını sessizce engelleyebilir. JSON: `{code, handle, date_text, caption, urls[]}`. Sonra `python3 $S/ig_fetch_images.py --workdir $W` (görselleri `media/<kod>/NN.jpg` yapar, açıklama/hesap/tarihi state'e yazar). Tarayıcı aracının çıktısı sorgu parametreli URL'leri gizleyebilir; bu normaldir, atlatılmaz. Uzun carousel'lerde slayt sayısını sayfadan doğrula.
-4. **Kareler.** `python3 $S/ig_frames.py --workdir $W` (1 fps, benzer kare eleme, en çok `max_frames`, kontak sayfası `frames/<kod>/_sheet.jpg` = süreyi kapsayan 12 kare).
-5. **OCR.** `python3 $S/ig_ocr.py --workdir $W`. Gürültü süzgeci: satır güveni + harf oranı + (kare>6 ise) satırın ≥2 karede görünmesi. Karışık zeminli videoda (kumaş, doğa) ham OCR yüzlerce çöp satır üretir; süzgeç bunu keser. **Stilize/dış çizgili başlıklar OCR'dan kaçar: adım 7 bu yüzden zorunlu.**
-6. **Konuşma.** `python3 $S/ig_speech.py --workdir $W` (ses var mı + Whisper; müzik-only = konuşma yok; ilk çalıştırmada model iner). Ardından `python3 $S/ig_subtitles.py --workdir $W`: konuşmayla örtüşen KISA OCR satırlarını altyazı sayıp ayıklar; satır atılan post `GÖZDEN GEÇİR` olur (3-4 kelimelik sahne başlıkları yanlış ayıklanabilir).
-7. **Gözden geçirme (atlanamaz).** `python3 $S/ig_board.py --workdir $W --batch 0 --size 6` her partide 6 postun inceleme panosunu (`frames/<kod>/_board.jpg`: ilk 2 kare + eşit aralıklı 6 kare; carousel/foto için `_slides_N.jpg`, 6 slayt/sayfa) üretir ve OCR/altyazı/konuşma özetini basar. Panoları görsel oku, sonucu `ig_state.py set` ile yaz (`screen_text`, `text_status: DÜZELTİLDİ`, `note`). Bir sonraki partide kalan sayı azalır (düzeltilen post listeden çıkar). **"OTO" geçen postlar da okunur:** stilize başlıklar yüksek OCR puanıyla bile kaçabilir ya da yarım okunabilir. Carousel/foto postlarında OCR zayıftır: hepsi görsel okunur. Görsel olarak doğrulanamayan post `GÖZDEN GEÇİR` kalır; Excel'in Hata-Eksik sayfasında görünür.
-8. **Kategorileme.** Açıklama + `screen_text` + `speech_text`. Taksonomi: `$W/taxonomy.json`, yoksa `taxonomy.default.json`. 1 ana kategori + en fazla 2 ikincil etiket; liste dışı değer yazılmaz, uymuyorsa `Diğer` + `note`. `ig_state.py set --code X --json '{"category":"..","tags":[".."],"_stage":"done"}'`
-9. **Excel.** `python3 $S/build_xlsx.py --workdir $W` → `$W/kaydedilenler.xlsx` (Kaydedilenler · Hata-Eksik · Kategori Dağılımı). Liste dışı kategori = dosya üretilmez.
-10. **Temizlik.** Elle yapılacaksa `ig_cleanup.py --apply`; hızlı yolda `ig_finish_batch.py` bunu doğrulamadan sonra kendisi çalıştırır. Silinen post `media_purged: true` alır, `frames/sheet/media` yolları state'ten de düşer; `ig_download` yeniden indirmez. Excel + `state.json` + URL yeterlidir.
+1. **List (Chrome).** In a new tab open `instagram.com/<username>/saved/all-posts/` (`/saved/` shows only collections). With the browser tool, collect the `a[href*="/p/"]` hrefs in order (Instagram order = saving order, newest first). Without scrolling only the first ~21 cards are in the DOM; scroll for the full list. Type hint: the card's `svg[aria-label]` value (`Clip`=reel, `Carousel`, empty=photo). Write to `$W/urls.json` → `python3 $S/ig_state.py --workdir $W add-list --file $W/urls.json --limit N`
+2. **Video posts (fallback path).** On the fast path `ig_import_feed.py` downloads from the direct URL; for a reel with no URL or an expired one use `python3 $S/ig_download.py --workdir $W` (yt-dlp: video + `.info.json`; caption, account=`channel`, date and duration are written to state automatically. `uploader_id` is a numeric ID and is not used). yt-dlp fails on image posts (expected).
+3. **Image posts (carousel/photo): meta.** From inside the page: `fetch('/p/<code>/',{credentials:'include'})` + `og:description`. The format varies (`N likes… - account on DATE: "caption"` / caption only / no caption); if nothing is found, the yt-dlp path is used (for videos). A bulk fetch may exceed the browser tool's time limit: start the job inside `window.__x`, then poll.
+   **3b. Image posts: content.** Go through every slide on the page (click `button[aria-label="Next"]`) and collect the visible large `img` URLs. Transfer, in order of preference: (a) **Clipboard path (recommended, needs no permission):** inject a button into the page (`position:fixed`) whose onclick runs `navigator.clipboard.writeText(JSON)`; give the button a **real mouse click** (a JS `click()` does not count as a "user gesture" for the clipboard or downloads). Then in the terminal: `LANG=en_US.UTF-8 pbpaste > ~/Downloads/ig_images_<code>.json` (the UTF-8 locale is required; otherwise non-ASCII characters and emoji get corrupted). (b) Blob download: works if Chrome has "automatic downloads" permission for instagram.com, but in practice it may download only the first file and silently block the rest. JSON: `{code, handle, date_text, caption, urls[]}`. Then `python3 $S/ig_fetch_images.py --workdir $W` (saves the images as `media/<code>/NN.jpg` and writes caption/account/date to state). The browser tool's output may hide query-string URLs; that is normal, do not work around it. For long carousels, confirm the slide count on the page.
+4. **Frames.** `python3 $S/ig_frames.py --workdir $W` (1 fps, near-duplicate frames dropped, at most `max_frames`, contact sheet `frames/<code>/_sheet.jpg` = 12 frames covering the whole duration).
+5. **OCR.** `python3 $S/ig_ocr.py --workdir $W`. Noise filter: line confidence + letter ratio + (if more than 6 frames) the line must appear in ≥2 frames. On videos with busy backgrounds (fabric, nature) raw OCR produces hundreds of junk lines; the filter cuts them. **Stylised/outlined titles escape OCR: that is why step 7 is mandatory.**
+6. **Speech.** `python3 $S/ig_speech.py --workdir $W` (is there audio + Whisper; music only = no speech; the model downloads on the first run). Then `python3 $S/ig_subtitles.py --workdir $W`: SHORT OCR lines that overlap the speech are treated as subtitles and removed; a post that loses lines becomes `REVIEW` (3-4 word scene titles can be removed by mistake).
+7. **Review (mandatory).** `python3 $S/ig_board.py --workdir $W --batch 0 --size 6` builds the review boards for 6 posts per batch (`frames/<code>/_board.jpg`: first 2 frames + 6 evenly spaced; for carousel/photo `_slides_N.jpg`, 6 slides per page) and prints the OCR/subtitle/speech summary. Read the boards visually and write the result with `ig_state.py set` (`screen_text`, `text_status: CORRECTED`, `note`). The remaining count drops with every batch (corrected posts leave the list). **"AUTO" posts are read too:** stylised titles can be missed or half-read even with a high OCR score. OCR is weak on carousel/photo posts: read all of them visually. A post that cannot be verified visually stays `REVIEW` and shows up on the spreadsheet's Errors-Missing sheet.
+8. **Categorising.** Caption + `screen_text` + `speech_text`. Taxonomy: `$W/taxonomy.json`, otherwise `taxonomy.default.json`. 1 main category + at most 2 secondary tags; values outside the list are never written; if nothing fits, use `Other` + `note`. `ig_state.py set --code X --json '{"category":"..","tags":[".."],"_stage":"done"}'`
+9. **Spreadsheet.** `python3 $S/build_xlsx.py --workdir $W` → `$W/saved-posts.xlsx` (Saved · Errors-Missing · Category Distribution). A category outside the list = no file is written.
+10. **Cleanup.** By hand: `ig_cleanup.py --apply`; on the fast path `ig_finish_batch.py` runs it after the verification. A deleted post gets `media_purged: true`, its `frames/sheet/media` paths are dropped from state too, and `ig_download` does not download it again. The spreadsheet + `state.json` + URL are enough.
 
-## Kalite kapıları
-- Excel satır sayısı = state.json post sayısı; Excel hücreleri state ile birebir karşılaştırılır.
-- "Diğer" oranı %15'i geçerse taksonomiyi gözden geçir; kategori eklendikten sonra eski postlar yeniden kategorilenir.
-- Konuşmalı reel, yalnız metinli reel, carousel için en az birer örnek elle karşılaştırılır.
+## Quality gates
+- Spreadsheet row count = post count in state.json; spreadsheet cells are compared with state one to one.
+- If the share of "Other" goes above 15%, review the taxonomy; after adding categories, recategorise the older posts.
+- Compare at least one speech reel, one text-only reel and one carousel by hand.
 
-## Operasyon dersleri
-- **Paralel yazım:** `save_state` kilitli ve birleştirmelidir, ama bir zincir çalışırken state'e elle yazarsan zincirin bellekteki kopyası o alanı tekrar yazabilir. Önce zincirin bitmesini bekle ya da yazdıktan sonra alanı doğrula.
-- **Arka plan işi çıktısı tamponlanır:** log boş görünse de ilerleme `state.json`'dadır; sayımla izle.
-- **Boyut:** 100 post ≈ 1,4 GB medya + 1,1 GB kare (5000 post ≈ 70 GB). Bu yüzden önbellek çalışma alanı dışındadır ve her tur sonunda `ig_finish_batch.py` ile temizlenir.
-- **Konuşma:** `ig_speech.py` medyası olmayan postu "konuşma yok" yazar; medya sonradan gelirse `speech_text`/`has_speech` alanlarını silip yeniden çalıştır.
-- **Şarkı sözü = konuşma değil:** Whisper arka plandaki şarkı sözünü konuşma sayabilir. İnceleme panosunda `KONUŞMA` satırı şarkı sözü gibi akıyorsa ve videoda konuşan yüz yoksa `has_speech: false`, `speech_text: ""` yaz. Lisanslı müzik etiketi tek başına eleme sebebi değildir: müzik üstüne gerçek seslendirme yapılan postlar da var.
-- **Bekleme döngüsünde `pgrep -f`:** döngünün kendi komut satırı deseni yakalar ve hiç bitmez; deseni `'scripts/ig_[a-z]+\.py'` gibi kendi metnini eşleştirmeyen biçimde yaz.
-- **Koleksiyonlar:** akış API'sindeki `saved_collection_ids` üyelerin hepsini göstermez. Üyelik için `/api/v1/feed/collection/<id>/posts/` okunur (`chrome-snippets.md` parça 3). **Kaydetme tarihi Instagram'ın web verisinde yoktur** (yalnız paylaşım tarihi `taken_at`); gerçek tarih için hesap verisi dışa aktarımı (Hesap Merkezi) gerekir.
-- **Toplu liste ve meta:** `/api/v1/feed/saved/posts/` sayfalama ile (sayfa başına ~20 post, ~1 sn arayla) tüm kaydedilenlerin açıklama, hesap, tarih (`taken_at`), tür ve carousel/foto görsel adreslerini tek taramada verir. Sonuç panoya → `saved-feed.json` (önbelleğe koy) → `ig_import_feed.py` medyayı indirir (adresler imzalıdır ve süresi dolar; indirmeden hemen önce taze döküm al). Dökümde `media_type` 1 foto, 2 video, 8 carousel.
-- **Yeni post ekleme:** `ig_state.py add-list --append-new --limit N` yalnız state'te olmayan kodları ekler, sırayı mevcut en büyük order'dan sürdürür, mevcut hiçbir order'ı değiştirmez. Eski `add-list` (bayraksız) listeye göre order'ı **yeniden yazar**: kısmi listeyle çalıştırma.
-- **Carousel'de yt-dlp:** bazı carousel'ler (video slaytlı) yt-dlp'de "No video formats found" verir; bunlar `ig_import_feed.py` yoluyla alınır. Videolu carousel'in kare/OCR adımları yine çalışır.
-- **Doğrulama betiği:** Excel `Sıra` sütunu metin yazılır (`clean()` hepsini str yapar); state ile karşılaştırırken tipi eşitle.
+## Lessons from real runs
+- **Concurrent writes:** `save_state` is locked and merging, but if you edit state by hand while a chain is running, the chain's in-memory copy can write that field again. Wait for the chain to finish, or check the field after writing.
+- **Background job output is buffered:** even if the log looks empty, progress is in `state.json`; track it by counting.
+- **Size:** 100 posts ≈ 1.4 GB media + 1.1 GB frames (5000 posts ≈ 70 GB). That is why the cache lives outside the working folder and is cleaned with `ig_finish_batch.py` after every batch.
+- **Speech:** `ig_speech.py` records "no speech" for a post without media; if the media arrives later, delete the `speech_text`/`has_speech` fields and run it again.
+- **Song lyrics are not speech:** Whisper may treat background lyrics as speech. If the `SPEECH` line on the review board reads like lyrics and nobody is speaking in the video, write `has_speech: false`, `speech_text: ""`. The licensed-music label alone is not a reason to drop speech: some posts have real voice-over on top of music.
+- **`pgrep -f` in a wait loop:** it matches the loop's own command line and never ends; write the pattern so that it cannot match its own text, e.g. `'scripts/ig_[a-z]+\.py'`.
+- **Collections:** the `saved_collection_ids` field in the feed API does not show all members. Read membership from `/api/v1/feed/collection/<id>/posts/` (`chrome-snippets.md` snippet 3). **The date a post was saved is not in Instagram's web data** (only the publish date `taken_at`); for the real date you need the account data export (Accounts Center).
+- **Bulk list and meta:** `/api/v1/feed/saved/posts/` with pagination (~20 posts per page, ~1 s apart) returns caption, account, date (`taken_at`), type and carousel/photo image URLs for all saved posts in one scan. Result to the clipboard → `saved-feed.json` (put it in the cache) → `ig_import_feed.py` downloads the media (the URLs are signed and expire; take a fresh dump right before downloading). In the dump, `media_type` is 1 photo, 2 video, 8 carousel.
+- **Adding new posts:** `ig_state.py add-list --append-new --limit N` adds only codes that are not in state, continues numbering from the current highest order and never changes an existing order. Plain `add-list` (no flag) **rewrites** the order to match the list: do not run it with a partial list.
+- **yt-dlp on carousels:** some carousels (with video slides) fail in yt-dlp with "No video formats found"; get them through `ig_import_feed.py`. Frames/OCR still work on carousels with video.
+- **Verification script:** the spreadsheet's `No` column is written as text (`clean()` turns everything into str); match the types when comparing with state.
 
-## Sınırlar
-- Instagram hesabına otomasyon riski: bekleme süresini kısaltma, partileri küçük tut, hesap uyarısı görülürse dur.
-- OCR stilize fontta ve karışık zeminde zayıf; güven puanı tek başına güvenilir değildir (eksik okunan satır yüksek puan alabilir).
-- Whisper kısa/gürültülü seste hata yapar; konuşma tespiti `audio_min_mean_volume_db` eşiğine bağlıdır.
-- Medya, kareler ve çalışma alanı kişisel veridir; hiçbir public adrese gitmez, repoya eklenmez.
+## Limits
+- Automating an Instagram account carries risk: do not shorten the delays, keep batches small, stop if the account shows a warning.
+- OCR is weak on stylised fonts and busy backgrounds; the confidence score alone is not reliable (a half-read line can still score high).
+- Whisper makes mistakes on short/noisy audio; speech detection depends on the `audio_min_mean_volume_db` threshold.
+- Media, frames and the working folder are personal data; they never go to a public address and are never committed.

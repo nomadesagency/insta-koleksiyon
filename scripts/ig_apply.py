@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""İnceleme sonuçlarını state'e yazar (ekran metni, kategori, etiket, not). stdin'den JSON okur.
+"""Writes review results to state (on-screen text, category, tags, note). Reads JSON from stdin.
 
-Kullanım:  ig_apply.py --workdir W < sonuc.json      |      ig_apply.py --workdir W --letters   (harf kodlarını göster)
-Girdi: {"<kod>": {"screen_text": "...", "category": "G", "tags": ["H"], "note": "...", "has_speech": false, ...}, ...}
-Kategori/etiket tam adla ya da taksonomi sırasına göre A..M harf kodlarıyla yazılabilir (A = 1. kategori ... M = 13.).
-Kategori verilen post `done` aşamasına geçer. Liste dışı kategori, aynı etiketin ana kategoriyle tekrarı, 2'den fazla etiket reddedilir.
-Varsayılan metin durumu DÜZELTİLDİ (görsel inceleme yapıldı); değiştirmek için "text_status" ver.
+Usage:  ig_apply.py --workdir W < results.json      |      ig_apply.py --workdir W --letters   (show letter codes)
+Input: {"<code>": {"screen_text": "...", "category": "G", "tags": ["H"], "note": "...", "has_speech": false, ...}, ...}
+Category/tags may be given by full name or by letter code in taxonomy order (A = 1st category ... M = 13th).
+A post that gets a category moves to the `done` stage. Categories outside the list, a tag repeating the category and
+more than the allowed number of tags are rejected.
+Default text status is CORRECTED (visual review done); pass "text_status" to change it.
 """
 from __future__ import annotations
 
@@ -18,7 +19,7 @@ from ig_common import advance, base_parser, load_state, load_taxonomy, save_stat
 
 def main() -> None:
     p = base_parser(__doc__)
-    p.add_argument("--letters", action="store_true", help="Harf kodlarını göster ve çık")
+    p.add_argument("--letters", action="store_true", help="Show letter codes and exit")
     args = p.parse_args()
     wd = Path(args.workdir)
     tax = load_taxonomy(wd)
@@ -35,20 +36,20 @@ def main() -> None:
     errors = []
     for code, f in data.items():
         if code not in state["posts"]:
-            errors.append(f"{code}: state'te yok")
+            errors.append(f"{code}: not in state")
             continue
         if "category" in f:
             f["category"] = full(f["category"])
             f["tags"] = [full(x) for x in f.get("tags", [])]
             if f["category"] not in cats or any(t not in cats for t in f["tags"]):
-                errors.append(f"{code}: kategori/etiket listede yok")
+                errors.append(f"{code}: category/tag not in the list")
             elif f["category"] in f["tags"] or len(f["tags"]) > tax["max_secondary"]:
-                errors.append(f"{code}: etiket kuralı (tekrar ya da en fazla {tax['max_secondary']})")
+                errors.append(f"{code}: tag rule (repeat, or more than {tax['max_secondary']})")
     if errors:
-        sys.exit("DOĞRULAMA HATASI, hiçbir şey yazılmadı:\n  " + "\n  ".join(errors))
+        sys.exit("VALIDATION ERROR, nothing written:\n  " + "\n  ".join(errors))
     for code, f in data.items():
         post = state["posts"][code]
-        f.setdefault("text_status", "DÜZELTİLDİ")
+        f.setdefault("text_status", "CORRECTED")
         post.pop("review_reason", None)
         if f.get("has_speech") is False:
             f.setdefault("speech_text", "")
@@ -57,7 +58,7 @@ def main() -> None:
             advance(post, "done")
         post.update(f)
     save_state(wd, state)
-    print("uygulandı:", len(data))
+    print("applied:", len(data))
 
 
 if __name__ == "__main__":

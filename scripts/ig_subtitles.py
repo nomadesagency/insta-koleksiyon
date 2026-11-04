@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Yanık altyazıyı ayıklar: konuşma transkriptiyle büyük ölçüde örtüşen OCR satırları 'altyazı' sayılır.
+"""Removes burned-in subtitles: OCR lines that largely overlap the speech transcript count as 'subtitles'.
 
-Kapsam kararı: görsel üstü metin dökümü altyazıyı İÇERMEZ (konuşma ayrı sütundadır). Yalnız kısa (en fazla MAX_SUBTITLE_WORDS kelime) satırlar altyazı sayılır. Heuristiktir
-(Whisper hataları örtüşmeyi düşürür), bu yüzden satır atılan her post 'GÖZDEN GEÇİR' olur.
-ig_speech.py'den SONRA çalıştırılır. İdempotent.
+Scope rule: the on-screen text does NOT include subtitles (speech has its own column). Only short lines (at most
+MAX_SUBTITLE_WORDS words) can count as subtitles. It is a heuristic (Whisper errors lower the overlap), so every post
+that loses a line is marked 'REVIEW'.
+Run AFTER ig_speech.py. Idempotent.
 """
 from __future__ import annotations
 
@@ -15,7 +16,7 @@ from ig_common import base_parser, load_state, save_state
 
 WORD_MATCH = 0.8
 LINE_MATCH = 0.6
-MAX_SUBTITLE_WORDS = 4  # yanık altyazı kısa ve hızlı değişir; uzun cümle tasarlanmış ekran metnidir
+MAX_SUBTITLE_WORDS = 4  # burned-in subtitles are short and change fast; a long sentence is designed on-screen text
 
 
 def words(s: str) -> list:
@@ -46,12 +47,12 @@ def main() -> None:
         post["subtitle_lines"] = subs
         post["screen_text"] = "\n".join(keep)
         if subs:
-            post["text_status"] = "GÖZDEN GEÇİR"
-            post["review_reason"] = f"{len(subs)} satır altyazı sayıldı, doğrula"
-        elif not keep and post.get("text_status") == "OTO":
-            post["text_status"], post["review_reason"] = "GÖZDEN GEÇİR", "OCR boş"
+            post["text_status"] = "REVIEW"
+            post["review_reason"] = f"{len(subs)} lines counted as subtitles, check"
+        elif not keep and post.get("text_status") == "AUTO":
+            post["text_status"], post["review_reason"] = "REVIEW", "OCR empty"
         save_state(wd, state)
-        print(code, f"altyazı={len(subs)} kalan={len(keep)}")
+        print(code, f"subtitles={len(subs)} kept={len(keep)}")
 
 
 if __name__ == "__main__":

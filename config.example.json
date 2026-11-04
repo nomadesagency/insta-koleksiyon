@@ -1,0 +1,24 @@
+{
+  "instagram_username": "",
+  "cache_dir": "~/Desktop/insta-koleksiyon-cache",
+  "browser_for_cookies": "chrome",
+  "delay_seconds": [
+    3,
+    6
+  ],
+  "frame_fps": 1,
+  "frame_dedupe_distance": 6,
+  "ocr_languages": "tur+eng",
+  "ocr_review_confidence": 70,
+  "speech_model": "small",
+  "speech_min_chars": 20,
+  "audio_min_mean_volume_db": -45,
+  "max_frames": 100,
+  "ocr_line_min_confidence": 65,
+  "ocr_persistence_above_frames": 6,
+  "long_video_seconds": 45,
+  "frame_fps_long": 0.5,
+  "speech_beam_size": 1,
+  "speech_threads": 8,
+  "workers": 0
+}

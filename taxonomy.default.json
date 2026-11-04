@@ -1,0 +1,20 @@
+{
+  "_doc": "Her postta 1 ana kategori (zorunlu) + en fazla max_secondary ikincil etiket. Değerler bu listeden birebir seçilir; liste dışı değer Excel üretimini durdurur.",
+  "max_secondary": 2,
+  "fallback": "Diğer",
+  "categories": [
+    "İçerik Stratejisi & Planlama",
+    "Hook, Kapak & Metin Yazımı",
+    "Reels & Video Üretimi",
+    "Carousel & Görsel Tasarım",
+    "Marka & Konumlandırma",
+    "Satış, Teklif & Müşteri Kazanımı",
+    "Yapay Zeka & Otomasyon",
+    "Araçlar & Verimlilik",
+    "Büyüme, Algoritma & Analitik",
+    "Girişimcilik & İş Modeli",
+    "Kişisel Gelişim & Zihniyet",
+    "Sektör İlhamı",
+    "Diğer"
+  ]
+}

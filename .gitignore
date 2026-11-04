@@ -1,0 +1,17 @@
+# Kişisel veri asla repoya girmez / Personal data never goes into the repo
+state.json
+state.lock
+state.json.tmp
+config.json
+taxonomy.json
+urls.json
+type-hints.json
+saved-feed.json
+ig_images_*.json
+*.xlsx
+media/
+frames/
+*-cache/
+__pycache__/
+*.pyc
+.DS_Store

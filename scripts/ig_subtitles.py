@@ -37,6 +37,7 @@ def main() -> None:
     wd = Path(args.workdir)
     state = load_state(wd)
 
+    changed = 0
     for code, post in state["posts"].items():
         if "ocr_text" not in post or "speech_text" not in post or "subtitle_lines" in post:
             continue
@@ -51,8 +52,10 @@ def main() -> None:
             post["review_reason"] = f"{len(subs)} lines counted as subtitles, check"
         elif not keep and post.get("text_status") == "AUTO":
             post["text_status"], post["review_reason"] = "REVIEW", "OCR empty"
-        save_state(wd, state)
+        changed += 1
         print(code, f"subtitles={len(subs)} kept={len(keep)}")
+    if changed:  # pure computation, no slow step: one save at the end is enough
+        save_state(wd, state)
 
 
 if __name__ == "__main__":

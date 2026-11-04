@@ -6,7 +6,9 @@ Input: {"<code>": {"screen_text": "...", "category": "G", "tags": ["H"], "note":
 Category/tags may be given by full name or by letter code in taxonomy order (A = 1st category ... M = 13th).
 A post that gets a category moves to the `done` stage. Categories outside the list, a tag repeating the category and
 more than the allowed number of tags are rejected.
-Default text status is CORRECTED (visual review done); pass "text_status" to change it.
+Default text status is CORRECTED; pass "text_status" to change it.
+--mode visual|text records HOW the posts were reviewed (default visual = boards/slides were looked at; text = decided from
+caption + OCR + speech only). It is shown in the spreadsheet's Review column, so text-only posts can be revisited later.
 """
 from __future__ import annotations
 
@@ -20,6 +22,7 @@ from ig_common import advance, base_parser, load_state, load_taxonomy, save_stat
 def main() -> None:
     p = base_parser(__doc__)
     p.add_argument("--letters", action="store_true", help="Show letter codes and exit")
+    p.add_argument("--mode", choices=["visual", "text"], default="visual", help="How these posts were reviewed")
     args = p.parse_args()
     wd = Path(args.workdir)
     tax = load_taxonomy(wd)
@@ -50,6 +53,7 @@ def main() -> None:
     for code, f in data.items():
         post = state["posts"][code]
         f.setdefault("text_status", "CORRECTED")
+        f.setdefault("review", args.mode)
         post.pop("review_reason", None)
         if f.get("has_speech") is False:
             f.setdefault("speech_text", "")

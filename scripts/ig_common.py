@@ -126,6 +126,36 @@ def save_state(workdir: Path, state: dict) -> None:
                 state._snap["posts"][c] = copy.deepcopy(p)
 
 
+class Saver:
+    """Throttled save_state: writes at most every `every` seconds, and always on exit (also after an error).
+
+    Saving the whole state.json after every post is slow on big archives (≈0.3 s per save at 5000 posts, ≈12 min
+    per 500-post batch). Use:  with Saver(wd, state) as sv: ... sv.tick()  (env IG_SAVE_EVERY overrides the interval).
+    """
+
+    def __init__(self, workdir: Path, state: dict, every: float | None = None):
+        self.wd, self.state = workdir, state
+        self.every = float(os.environ.get("IG_SAVE_EVERY", 20)) if every is None else every
+        self.last, self.dirty = time.time(), False
+
+    def tick(self) -> None:
+        self.dirty = True
+        if time.time() - self.last >= self.every:
+            self.flush()
+
+    def flush(self) -> None:
+        if self.dirty:
+            save_state(self.wd, self.state)
+            self.dirty = False
+        self.last = time.time()
+
+    def __enter__(self) -> "Saver":
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.flush()
+
+
 def shortcode(url: str) -> str:
     m = re.search(r"instagram\.com/(?:[^/]+/)?(?:p|reel|reels|tv)/([A-Za-z0-9_-]+)", url)
     if not m:

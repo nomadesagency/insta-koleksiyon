@@ -20,7 +20,7 @@ from ig_common import base_parser, load_state, load_taxonomy
 COLUMNS = [
     ("No", 6), ("URL", 38), ("Account", 18), ("Type", 10), ("Published", 13), ("Collection", 16),
     ("Caption", 60), ("On-screen text", 60), ("Speech transcript", 60), ("Has speech", 12),
-    ("Text status", 14), ("Category", 28), ("Tags", 34), ("Media folder", 24), ("Note", 30),
+    ("Text status", 14), ("Category", 28), ("Tags", 34), ("Media folder", 24), ("Note", 30), ("Review", 10),
 ]
 CELL_LIMIT = 32000
 
@@ -89,7 +89,8 @@ def main() -> None:
                v.get("caption"), screen, v.get("speech_text"),
                "Yes" if v.get("has_speech") else "No", v.get("text_status", ""),
                v.get("category", ""), ", ".join(v.get("tags", [])),
-               str(Path("media") / code) if v.get("media") and not v.get("media_purged") else "", v.get("note", "")]
+               str(Path("media") / code) if v.get("media") and not v.get("media_purged") else "", v.get("note", ""),
+               v.get("review", "")]
         ws.append([clean(x) for x in row])
         if v.get("error") or v.get("text_status") == "REVIEW" or not v.get("caption"):
             problems.append((code, v))

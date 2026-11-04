@@ -9,7 +9,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from ig_common import advance, base_parser, cache_dir, load_config, load_state, need_tool, polite_sleep, save_state
+from ig_common import Saver, advance, base_parser, cache_dir, load_config, load_state, need_tool, polite_sleep
 
 MEDIA_EXT = {".mp4", ".mov", ".webm", ".mkv", ".jpg", ".jpeg", ".png", ".webp"}
 
@@ -43,6 +43,11 @@ def main() -> None:
     cd = cache_dir(args, wd, cfg)
     ytdlp = need_tool("yt-dlp")
 
+    with Saver(wd, state) as sv:
+        _run(args, cfg, state, cd, ytdlp, sv)
+
+
+def _run(args, cfg: dict, state: dict, cd: Path, ytdlp: str, sv) -> None:
     done = failed = 0
     for code, post in state["posts"].items():
         if args.code and code != args.code:
@@ -57,7 +62,7 @@ def main() -> None:
             fill_meta(post, out_dir)
             post["media"] = sorted(str(f.relative_to(cd)) for f in existing)
             advance(post, "media")
-            save_state(wd, state)
+            sv.tick()
             continue
         out_dir.mkdir(parents=True, exist_ok=True)
         cmd = [ytdlp, "--cookies-from-browser", cfg["browser_for_cookies"], "--no-progress", "--write-info-json",
@@ -73,7 +78,7 @@ def main() -> None:
             post["media"] = sorted(str(f.relative_to(cd)) for f in files)
             advance(post, "media")
             done += 1
-        save_state(wd, state)
+        sv.tick()
         polite_sleep(cfg)
     print(f"downloaded={done} errors={failed}")
 

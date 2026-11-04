@@ -41,6 +41,8 @@ python3 $S/ig_finish_batch.py --workdir $W                                     #
 
 ### Notlar
 - Betikler idempotenttir: tekrar çalıştırınca biten postlar atlanır.
+- Arşiv bir kez oluştuktan sonra döküm artımlı alınır: `ig_state.py stop-codes` çıktısı sayfaya yapıştırılınca döküm, önceki dökümde görülen posta gelince durur (yüzlerce sayfa yerine 1-2 sayfa).
+- Excel'deki **Review** sütunu her postun görsel mi yoksa yalnız metinden mi incelendiğini gösterir.
 - `build_xlsx.py`, taksonomide olmayan bir kategori görürse Excel'i yazmaz.
 - `ig_finish_batch.py` geçici medyayı yalnız Excel state ile birebir tuttuğunda siler.
 - Bir Instagram hesabını otomatikleştirmek hız sınırı ya da uyarı riski taşır. Bekleme sürelerini kısaltma, partileri küçük tut.
@@ -85,6 +87,8 @@ A batch of 50 posts is prepared in about 7 minutes on a 10-core machine. The slo
 
 ### Notes
 - Scripts are idempotent: re-running skips finished posts.
+- Once the archive exists, take incremental dumps: paste the output of `ig_state.py stop-codes` into the page and the dump stops at posts already seen (1-2 pages instead of hundreds).
+- The spreadsheet's **Review** column shows whether each post was reviewed visually or from text only.
 - `build_xlsx.py` refuses to write the spreadsheet if a category is not in the taxonomy.
 - `ig_finish_batch.py` deletes the temporary media only after the spreadsheet matches the state file cell by cell.
 - Automating an Instagram account carries a risk of rate limits or warnings. Keep delays as they are and batches small.

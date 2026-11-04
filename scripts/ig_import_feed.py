@@ -16,14 +16,27 @@ Works only on posts that are in state and whose media is not downloaded yet. Ide
 from __future__ import annotations
 
 import json
+import re
+import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ig_common import advance, base_parser, cache_dir, feed_path, load_config, load_state, save_state, workers
+from ig_common import Saver, advance, base_parser, cache_dir, feed_path, load_config, load_state, save_state, workers
 
 TYPE_NAME = {1: "Photo", 2: "Reel", 8: "Carousel"}
+
+
+def expires_at(url: str) -> int | None:
+    """Instagram CDN URLs carry their expiry as a hex unix time in the `oe` parameter."""
+    m = re.search(r"[?&]oe=([0-9A-Fa-f]+)", url)
+    return int(m.group(1), 16) if m else None
+
+
+def expired(url: str) -> bool:
+    t = expires_at(url)
+    return t is not None and t < time.time()
 
 
 def download(url: str, dest: Path) -> None:
@@ -53,6 +66,8 @@ def fetch_post(code: str, row: dict, cd: Path):
                 items.append((s["i"], f"{i:02d}.jpg"))
     if not items:
         return code, None, "no downloadable URL in the dump"
+    if any(expired(u) for u, _ in items):  # fail fast instead of waiting on dead URLs
+        return code, None, "URL expired (take a new dump)"
     files = []
     for url, name in items:
         dest = out / name
@@ -108,8 +123,11 @@ def main() -> None:
             todo.append((code, r))
     save_state(wd, state)
 
+    dead = sum(1 for _, r in todo if any(expired(u) for u in [r.get("v")] + [s.get("v") or s.get("i") for s in r.get("s") or []] if u))
+    if dead:
+        print(f"WARNING: {dead}/{len(todo)} posts have expired URLs in the dump; take a new dump (chrome-snippets.md snippets 1 + 2)")
     ok = failed = 0
-    with ThreadPoolExecutor(max_workers=min(workers(cfg) * 2, 12)) as pool:  # network-bound work: more threads than cores
+    with ThreadPoolExecutor(max_workers=min(workers(cfg) * 2, 12)) as pool, Saver(wd, state) as sv:  # network-bound: more threads than cores
         futs = [pool.submit(fetch_post, c, r, cd) for c, r in todo]
         for f in as_completed(futs):
             code, files, err = f.result()
@@ -122,7 +140,7 @@ def main() -> None:
             else:
                 post["error"] = err
                 failed += 1
-            save_state(wd, state)
+            sv.tick()
     print(f"meta={meta} media_downloaded={ok} errors={failed}" + ("  (use ig_download.py as the fallback for failures)" if failed else ""))
 
 

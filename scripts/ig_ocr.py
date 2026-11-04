@@ -19,7 +19,7 @@ from pathlib import Path
 
 from PIL import Image, ImageOps
 
-from ig_common import advance, base_parser, cache_dir, load_config, load_state, need_tool, save_state, workers
+from ig_common import Saver, advance, base_parser, cache_dir, load_config, load_state, need_tool, workers
 
 MIN_WORD_CONF = 30
 UPSCALE_BELOW = int(os.environ.get("IG_OCR_UPSCALE_BELOW", 600))
@@ -107,12 +107,14 @@ def main() -> None:
     tess = need_tool("tesseract")
     min_conf = cfg["ocr_line_min_confidence"]
 
-    with ProcessPoolExecutor(max_workers=workers(cfg)) as pool:  # frames in parallel; tesseract is single-threaded
-        for code, post in state["posts"].items():
-            if not post.get("frames") or "ocr_text" in post:
-                continue
-            jobs = [(tess, cd / rel, cfg["ocr_languages"], min_conf) for rel in post["frames"]]
-            frame_lines = list(pool.map(_ocr_job, jobs, chunksize=4))
+    todo = [(c, p) for c, p in state["posts"].items() if p.get("frames") and "ocr_text" not in p]
+    # One queue for the frames of ALL posts: a post with 1-3 frames (photo, small carousel) no longer leaves most cores idle.
+    # Executor.map submits everything at once and yields results in order, so each post is finished as soon as its frames are in.
+    jobs = [(tess, cd / rel, cfg["ocr_languages"], min_conf) for _, p in todo for rel in p["frames"]]
+    with ProcessPoolExecutor(max_workers=workers(cfg)) as pool, Saver(wd, state) as sv:  # tesseract is single-threaded
+        results = pool.map(_ocr_job, jobs, chunksize=2)
+        for code, post in todo:
+            frame_lines = [next(results) for _ in post["frames"]]
             kept = merge_lines(frame_lines, 2 if len(frame_lines) > cfg["ocr_persistence_above_frames"] else 1)
             merged = [c["text"] for c in kept]
             confs = [c["conf"] for c in kept]
@@ -128,7 +130,7 @@ def main() -> None:
             if post["text_status"] == "AUTO":
                 post["screen_text"] = post["ocr_text"]
             advance(post, "ocr")
-            save_state(wd, state)
+            sv.tick()
             print(code, post["text_status"], mean, f"{len(merged)} lines", flush=True)
 
 

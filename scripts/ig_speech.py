@@ -11,7 +11,7 @@ import subprocess
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
-from ig_common import base_parser, cache_dir, load_config, load_state, need_tool, save_state, workers
+from ig_common import Saver, base_parser, cache_dir, load_config, load_state, need_tool, save_state, workers
 
 VIDEO = {".mp4", ".mov", ".webm", ".mkv"}
 
@@ -76,12 +76,13 @@ def main() -> None:
     # Whisper does not scale with more threads: a few processes x few threads is faster
     n = max(min(cfg.get("speech_workers", 3), len(jobs)), 1)
     threads = max((workers(cfg) + 2) // n, 2)
-    with ProcessPoolExecutor(max_workers=n, initializer=_init_worker, initargs=(cfg["speech_model"], threads)) as pool:
+    with ProcessPoolExecutor(max_workers=n, initializer=_init_worker, initargs=(cfg["speech_model"], threads)) as pool, \
+            Saver(wd, state) as sv:
         futs = [pool.submit(analyze, c, v, ffmpeg, cfg, d, au) for c, v, d, au in jobs]
         for f in as_completed(futs):
             code, fields, vol = f.result()
             state["posts"][code].update(fields)
-            save_state(wd, state)
+            sv.tick()
             print(code, "speech" if fields["has_speech"] else "no speech", vol, flush=True)
 
 

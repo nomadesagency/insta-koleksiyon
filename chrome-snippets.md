@@ -8,12 +8,18 @@ General rules:
 - Tool output may **block** text that contains cookie or query-string URLs, and it truncates long text: take the data from the **clipboard**, not from the tool output (snippet 2).
 - Endpoint requests are sent with the `x-ig-app-id: 936619743392459` (Instagram's public web app ID) + `x-requested-with: XMLHttpRequest` headers and `credentials:'include'`. Wait a random 0.7-1.8 s between pages.
 
-## 1. Feed dump (all saved posts)
+## 1. Feed dump (all saved posts, or only the new ones)
 Returns caption, account, date, type, audio type, **direct video URL** and carousel/photo image URLs for every saved post in one pass
 (~20 posts per page; 5000 posts ≈ 250 pages ≈ 5-6 min, ≈ 9 MB). The list is in saving order (newest first).
 
+**Incremental dump (recommended once the archive exists):** newly saved posts are always at the top, so there is no need to scan
+everything. Run `python3 scripts/ig_state.py --workdir <working-folder> stop-codes`, paste its one-line output into the page first,
+then run the snippet below: it stops at the first page that contains a post from the previous dump (usually 1-2 pages, seconds instead
+of minutes, and no rate-limit risk). Without that line the snippet does a full dump. The stop set is used once and then removed.
+
 ```js
-window.__feed={done:false,rows:[],pages:0,err:null};
+window.__feed={done:false,rows:[],pages:0,err:null,stopped:false};
+const STOP=window.__stop||null; delete window.__stop;
 const H={'x-ig-app-id':'936619743392459','x-requested-with':'XMLHttpRequest'};
 const img=o=>{const c=o&&o.image_versions2&&o.image_versions2.candidates;return c&&c[0]?c[0].url:null};
 const vid=o=>o&&o.video_versions&&o.video_versions[0]?o.video_versions[0].url:null;
@@ -30,11 +36,13 @@ const rowOf=m=>{const cm=m.clips_metadata||{};
   const r=await fetch('/api/v1/feed/saved/posts/'+(max?('?max_id='+encodeURIComponent(max)):''),{credentials:'include',headers:H});
   if(r.status!==200){window.__feed.err='status '+r.status+' page '+i;break}
   const j=await r.json(); (j.items||[]).forEach(x=>window.__feed.rows.push(rowOf(x.media)));
-  window.__feed.pages++; if(!j.more_available||!j.next_max_id)break; max=j.next_max_id;
+  window.__feed.pages++;
+  if(STOP&&(j.items||[]).some(x=>STOP.has(x.media.code))){window.__feed.stopped=true;break}
+  if(!j.more_available||!j.next_max_id)break; max=j.next_max_id;
   await new Promise(r=>setTimeout(r,900+Math.random()*700));}
  }catch(e){window.__feed.err=String(e)} window.__feed.done=true})(); 'started'
 ```
-Poll: `({done:window.__feed.done,n:window.__feed.rows.length,err:window.__feed.err})`.
+Poll: `({done:window.__feed.done,n:window.__feed.rows.length,stopped:window.__feed.stopped,err:window.__feed.err})` (`stopped:true` = the incremental dump reached known posts).
 The **first N pages** are often enough (e.g. 3-4 pages for the next 50 posts): change the loop to `i<4`. During a long scan `window.__feed.rows` stays in memory; do not reload the page.
 Fields: `t` 1 photo / 2 video / 8 carousel; `au` `original_sounds` | `licensed_music`; `v` and `s[].i` are signed and **expire after a few hours**: take a fresh dump right before downloading.
 

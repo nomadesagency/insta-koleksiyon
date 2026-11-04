@@ -3,6 +3,8 @@
 
 Titles usually appear at the start of a video, so the first two frames are always included.
 Usage: ig_board.py --workdir W --pending   (ALL pending posts: flagged + AUTO, in one go)   |   --batch 0 --size 5 (flagged only)   |   --codes A,B
+  --need-visual  only posts whose text cannot be trusted without looking (REVIEW status, carousel/photo, empty OCR)
+  --text-only    print the text summary without building board images (fast first pass; record it with ig_apply --mode text)
 Output: frames/<code>/_board.jpg + an OCR/subtitle/speech summary in the terminal. The reviewer (you or an agent) reads the boards visually.
 """
 from __future__ import annotations
@@ -46,6 +48,8 @@ def main() -> None:
     p.add_argument("--pending", action="store_true", help="All posts whose review is not finished (stage != done); AUTO included")
     p.add_argument("--batch", type=int, default=0)
     p.add_argument("--size", type=int, default=5)
+    p.add_argument("--need-visual", action="store_true", help="Only posts that need a visual check")
+    p.add_argument("--text-only", action="store_true", help="No board images, text summary only")
     args = p.parse_args()
     wd = Path(args.workdir)
     cd = cache_dir(args, wd)
@@ -61,13 +65,19 @@ def main() -> None:
                 if v.get("text_status") == "REVIEW" and v.get("frames")]
         codes = todo[args.batch * args.size:(args.batch + 1) * args.size]
         print(f"REVIEW remaining: {len(todo)}  this batch: {len(codes)}")
+    if args.need_visual:
+        codes = [c for c in codes if posts[c].get("text_status") == "REVIEW" or posts[c].get("type") in ("Carousel", "Photo")
+                 or not (posts[c].get("screen_text") or "").strip()]
+        print(f"need a visual check: {len(codes)}")
     for c in codes:
         v = posts[c]
         if not v.get("frames"):
             print("=====", c, "no frames")
             continue
-        print(f"===== {c} @{v.get('account')} {v.get('type')} {round(v.get('duration') or 0)}s")
-        if v.get("type") in ("Carousel", "Photo"):
+        print(f"===== {c} @{v.get('account')} {v.get('type')} {round(v.get('duration') or 0)}s {v.get('text_status', '')}")
+        if args.text_only:
+            pass
+        elif v.get("type") in ("Carousel", "Photo"):
             # carousel: every slide must be read, 6 slides per board, larger
             fr = v["frames"]
             for k in range(0, len(fr), 6):

@@ -11,7 +11,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from ig_common import base_parser, cache_dir, load_config, load_state, need_tool, save_state, workers
+from ig_common import Saver, base_parser, cache_dir, load_config, load_state, need_tool, workers
 
 VIDEO = {".mp4", ".mov", ".webm", ".mkv"}
 IMAGE = {".jpg", ".jpeg", ".png", ".webp"}
@@ -90,7 +90,7 @@ def main() -> None:
     ffmpeg = need_tool("ffmpeg")
 
     todo = [(c, v) for c, v in state["posts"].items() if v.get("media") and not v.get("frames")]
-    with ProcessPoolExecutor(max_workers=max(workers(cfg) // 2, 2)) as pool:  # ffmpeg is multi-threaded already
+    with ProcessPoolExecutor(max_workers=max(workers(cfg) // 2, 2)) as pool, Saver(wd, state) as sv:  # ffmpeg is multi-threaded already
         futs = [pool.submit(build_frames, c, v["media"], str(cd), ffmpeg, cfg["frame_fps"],
                             cfg["frame_dedupe_distance"], cfg["max_frames"], v.get("duration") or 0,
                             cfg.get("long_video_seconds", 0), cfg.get("frame_fps_long")) for c, v in todo]
@@ -98,7 +98,7 @@ def main() -> None:
             code, rels, sheet = f.result()
             post = state["posts"][code]
             post["frames"], post["sheet"] = rels, sheet
-            save_state(wd, state)
+            sv.tick()
             print(code, len(rels), "frames", flush=True)
 
 

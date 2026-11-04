@@ -6,6 +6,8 @@ Subcommands:
   set       --code X --json '{...}'                      Updates the fields of one post (meta, category, corrected text...)
   show      [--code X]                                   Summary or a single post
   review    Lists posts that need review (with their contact sheet path)
+  stop-codes                                             Prints a JS line for an incremental dump (chrome-snippets.md snippet 1):
+                                                         the dump stops at the first page that contains a post seen in the last dump
 """
 from __future__ import annotations
 
@@ -30,6 +32,7 @@ def main() -> None:
     sh = sub.add_parser("show")
     sh.add_argument("--code")
     sub.add_parser("review")
+    sub.add_parser("stop-codes")
     args = p.parse_args()
 
     wd = Path(args.workdir)
@@ -39,7 +42,10 @@ def main() -> None:
 
     if args.cmd == "add-list":
         if args.feed:
-            urls = [f"https://www.instagram.com/p/{r['c']}/" for r in json.loads(Path(args.feed).read_text(encoding="utf-8"))]
+            rows = json.loads(Path(args.feed).read_text(encoding="utf-8"))
+            urls = [f"https://www.instagram.com/p/{r['c']}/" for r in rows]
+            if rows:  # the newest saved posts of this dump: the next incremental dump can stop when it reaches them
+                state["feed_head"] = [r["c"] for r in rows[:30]]
         elif args.file:
             urls = json.loads(Path(args.file).read_text(encoding="utf-8"))
         else:
@@ -84,6 +90,12 @@ def main() -> None:
             for v in posts.values():
                 counts[v.get("stage", "?")] = counts.get(v.get("stage", "?"), 0) + 1
             print(json.dumps(counts, ensure_ascii=False), f"total={len(posts)}")
+
+    elif args.cmd == "stop-codes":
+        head = state.get("feed_head")
+        if not head:
+            raise SystemExit("No feed_head in state yet: do one full dump + add-list --feed first.")
+        print("window.__stop=new Set(" + json.dumps(head) + ");")
 
     elif args.cmd == "review":
         for code, v in posts.items():

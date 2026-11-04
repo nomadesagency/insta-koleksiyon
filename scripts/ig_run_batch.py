@@ -4,7 +4,7 @@
 At the end it prints how many posts await review; next step (review): read the `ig_board.py --pending` boards and write the results with `ig_apply.py`.
 
 Usage:
-  ig_run_batch.py --workdir W --feed ~/Desktop/insta-koleksiyon-cache/saved-feed.json --new 50
+  ig_run_batch.py --workdir W --new 50          (the feed dump is read from W/saved-feed.json; --feed for another path)
   (--new 0 or omitted: adds nothing, processes posts already pending in state)
 
 Each stage is idempotent; if interrupted, run the same command again. OCR and speech run at the same time
@@ -38,16 +38,19 @@ def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--workdir", required=True)
     p.add_argument("--cachedir")
-    p.add_argument("--feed", required=True, help="Feed dump (saved-feed.json)")
+    p.add_argument("--feed", help="Feed dump (default: <workdir>/saved-feed.json)")
     p.add_argument("--new", type=int, default=0, help="Number of new posts to add to state (0 = none)")
     args = p.parse_args()
+    feed = str(Path(args.feed).expanduser()) if args.feed else str(Path(args.workdir) / "saved-feed.json")
+    if not Path(feed).exists():
+        sys.exit(f"ERROR: feed dump not found: {feed} (chrome-snippets.md snippets 1 + 2)")
     w = ["--workdir", args.workdir] + (["--cachedir", args.cachedir] if args.cachedir else [])
     t_all = time.time()
     times = {}
 
     if args.new:
-        times["list"] = run([str(HERE / "ig_state.py"), *w, "add-list", "--feed", args.feed, "--append-new", "--limit", str(args.new)], "list")
-    times["media"] = run([str(HERE / "ig_import_feed.py"), *w, "--file", args.feed], "meta + media (parallel)")
+        times["list"] = run([str(HERE / "ig_state.py"), *w, "add-list", "--feed", feed, "--append-new", "--limit", str(args.new)], "list")
+    times["media"] = run([str(HERE / "ig_import_feed.py"), *w, "--file", feed], "meta + media (parallel)")
     times["yt-dlp fallback"] = run([str(HERE / "ig_download.py"), *w], "yt-dlp fallback (reels without media only)")
     times["frames"] = run([str(HERE / "ig_frames.py"), *w], "frames (parallel)")
 

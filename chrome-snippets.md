@@ -46,7 +46,7 @@ const b=document.createElement('button'); b.id='cpbtn'; b.textContent='COPY';
 b.style.cssText='position:fixed;top:10px;left:10px;width:260px;height:80px;z-index:999999;font-size:24px;background:#ff0;color:#000';
 b.onclick=async()=>{await navigator.clipboard.writeText(window.__payload); b.textContent='COPIED'}; document.body.appendChild(b); window.__payload.length
 ```
-Then click the button (≈ 130, 50) with a real mouse click; on the Mac: `LANG=en_US.UTF-8 pbpaste > ~/Desktop/insta-koleksiyon-cache/saved-feed.json`
+Then click the button (≈ 130, 50) with a real mouse click; on the Mac: `LANG=en_US.UTF-8 pbpaste > <working-folder>/saved-feed.json`
 (the UTF-8 locale is required, otherwise non-ASCII characters and emoji get corrupted). Payloads up to 9 MB transferred without problems.
 
 ## 3. Collection membership (read only, optional)

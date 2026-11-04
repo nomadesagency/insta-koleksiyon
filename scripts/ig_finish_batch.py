@@ -5,7 +5,7 @@ On failure nothing is deleted (review incomplete, spreadsheet does not match sta
 A deleted post gets `media_purged: true` and is not downloaded again. Only posts at stage `done` are deleted.
 
 Usage:  ig_finish_batch.py --workdir W
-Cache location: --cachedir > config cache_dir > ~/Desktop/insta-koleksiyon-cache (outside the working folder).
+media/ and frames/ location: --cachedir > config cache_dir > the working folder.
 """
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ def main() -> None:
     sh("build spreadsheet", [str(HERE / "build_xlsx.py"), "--workdir", args.workdir])
     sh("verify spreadsheet ↔ state", [str(HERE / "verify_xlsx.py"), "--workdir", args.workdir])
     sh("clean media + frames", [str(HERE / "ig_cleanup.py"), *w, "--apply"])
-    print(f"cache ({cd}) emptied; the only permanent output is the spreadsheet + state.json.")
+    print(f"media/ and frames/ removed from {cd}; the permanent output is the spreadsheet + state.json.")
 
 
 if __name__ == "__main__":

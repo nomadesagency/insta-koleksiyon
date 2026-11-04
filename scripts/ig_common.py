@@ -1,7 +1,7 @@
 """Shared helpers: config, state.json (atomic write + verification), taxonomy, PATH.
 
-Holds no personal data. Paths come from --workdir (state.json, config, spreadsheet: small files) and
---cachedir (media/, frames/: heavy files, kept outside the working folder).
+Holds no personal data. Every file (state.json, config, JSON dumps, spreadsheet, media/, frames/) is written to the
+working folder given with --workdir. --cachedir is an optional override for the heavy media/ and frames/ folders only.
 """
 from __future__ import annotations
 
@@ -27,18 +27,16 @@ os.environ["PATH"] = "/opt/homebrew/bin:/usr/local/bin:" + os.environ.get("PATH"
 def base_parser(desc: str) -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=desc)
     p.add_argument("--workdir", required=True, help="Private working folder (state.json, config.json, spreadsheet)")
-    p.add_argument("--cachedir", help="Location of media/ and frames/ (default: config cache_dir or "
-                   "~/Desktop/insta-koleksiyon-cache). Kept outside the working folder to avoid cloud sync load")
+    p.add_argument("--cachedir", help="Optional: put media/ and frames/ somewhere else (default: config cache_dir, "
+                   "otherwise the working folder)")
     return p
 
 
 def cache_dir(args, workdir: Path, cfg: dict | None = None) -> Path:
-    """Root of the heavy files (media/, frames/). Priority: --cachedir > config cache_dir > desktop default."""
+    """Root of the heavy files (media/, frames/). Priority: --cachedir > config cache_dir > the working folder."""
     cfg = cfg if cfg is not None else load_config(workdir)
-    raw = args.cachedir or cfg.get("cache_dir") or "~/Desktop/insta-koleksiyon-cache"
+    raw = args.cachedir or cfg.get("cache_dir") or str(workdir)
     path = Path(raw).expanduser().resolve()
-    if path == workdir.resolve() or workdir.resolve() in path.parents:
-        sys.exit("ERROR: cachedir cannot be inside the working folder (the point is to keep heavy files out of it).")
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -59,6 +57,11 @@ def load_taxonomy(workdir: Path) -> dict:
     """A taxonomy.json in the working folder overrides the default."""
     custom = workdir / "taxonomy.json"
     return load_json(custom if custom.exists() else SKILL_DIR / "taxonomy.default.json")
+
+
+def feed_path(workdir: Path, given: str | None) -> Path:
+    """The feed dump: the given path, otherwise <workdir>/saved-feed.json."""
+    return Path(given).expanduser() if given else workdir / "saved-feed.json"
 
 
 def state_path(workdir: Path) -> Path:

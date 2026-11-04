@@ -3,7 +3,7 @@
 
 Only posts at stage 'done' are deleted (default: dry run, --apply actually deletes).
 A deleted post gets `media_purged: true` in state; ig_download.py does not download it again.
-media/frames under both --cachedir and (left over from an older setup) --workdir are cleaned.
+media/frames are cleaned in both the working folder and --cachedir/cache_dir when one is set.
 """
 from __future__ import annotations
 
@@ -24,12 +24,13 @@ def main() -> None:
     wd = Path(args.workdir)
     cd = cache_dir(args, wd)
     state = load_state(wd)
+    roots = list(dict.fromkeys([cd, wd.resolve()]))  # same folder when no cache_dir is set: count it once
 
     total, count = 0, 0
     for code, post in state["posts"].items():
         if post.get("stage") != "done":
             continue
-        targets = [root / sub / code for root in {cd, wd} for sub in ("media", "frames")]
+        targets = [root / sub / code for root in roots for sub in ("media", "frames")]
         existing = [t for t in targets if t.exists()]
         if not existing and post.get("media_purged"):
             if args.apply:
@@ -46,7 +47,7 @@ def main() -> None:
                 post.pop(k, None)
     if args.apply:
         save_state(wd, state)
-        for root in {cd, wd}:  # remove parent folders that are now empty
+        for root in roots:  # remove parent folders that are now empty
             for sub in ("media", "frames"):
                 d = root / sub
                 if d.exists() and not any(d.iterdir()):

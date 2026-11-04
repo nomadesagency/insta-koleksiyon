@@ -2,7 +2,7 @@
 """Saves the image URLs from ig_images_<code>.json files (taken from Chrome) as media/<code>/NN.jpg.
 
 For carousel/photo posts (yt-dlp cannot download image posts). The JSON comes from the page via the clipboard
-(SKILL.md step 3b: a button injected into the page, a real mouse click, then `pbpaste > ~/Downloads/ig_images_<code>.json`).
+(SKILL.md step 3b: a button injected into the page, a real mouse click, then `pbpaste > <workdir>/ig_images_<code>.json`).
 The URLs are signed, no cookies needed. Each processed JSON file is deleted.
 """
 from __future__ import annotations
@@ -16,13 +16,13 @@ from ig_common import advance, base_parser, cache_dir, load_state, save_state
 
 def main() -> None:
     p = base_parser(__doc__)
-    p.add_argument("--downloads", default=str(Path.home() / "Downloads"))
+    p.add_argument("--downloads", help="Folder holding the ig_images_*.json files (default: the working folder)")
     args = p.parse_args()
     wd = Path(args.workdir)
     state = load_state(wd)
     cd = cache_dir(args, wd)
 
-    for jf in sorted(Path(args.downloads).glob("ig_images_*.json")):
+    for jf in sorted(Path(args.downloads or wd).expanduser().glob("ig_images_*.json")):
         data = json.loads(jf.read_text(encoding="utf-8"))
         code = data["code"]
         post = state["posts"].get(code)

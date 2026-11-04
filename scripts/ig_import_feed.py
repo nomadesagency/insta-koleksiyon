@@ -10,7 +10,7 @@ File format (JSON array), output of the "Feed dump" snippet in chrome-snippets.m
    au: audio type (original_sounds | licensed_music), mu: song title, s: [{t: slide type, i: image URL, v: slide video URL}]}
 URLs are signed and expire (hours): take the dump shortly before downloading.
 
-Usage: ig_import_feed.py --workdir W --file saved-feed.json [--codes A,B] [--no-media]
+Usage: ig_import_feed.py --workdir W [--file saved-feed.json] [--codes A,B] [--no-media]   (default file: W/saved-feed.json)
 Works only on posts that are in state and whose media is not downloaded yet. Idempotent.
 """
 from __future__ import annotations
@@ -21,7 +21,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ig_common import advance, base_parser, cache_dir, load_config, load_state, save_state, workers
+from ig_common import advance, base_parser, cache_dir, feed_path, load_config, load_state, save_state, workers
 
 TYPE_NAME = {1: "Photo", 2: "Reel", 8: "Carousel"}
 
@@ -85,7 +85,7 @@ def apply_meta(post: dict, r: dict) -> None:
 
 def main() -> None:
     p = base_parser(__doc__)
-    p.add_argument("--file", required=True, help="Feed dump JSON")
+    p.add_argument("--file", help="Feed dump JSON (default: <workdir>/saved-feed.json)")
     p.add_argument("--codes", help="Only these codes (comma separated)")
     p.add_argument("--no-media", action="store_true", help="Meta only; do not download media")
     args = p.parse_args()
@@ -93,7 +93,7 @@ def main() -> None:
     cfg = load_config(wd)
     cd = cache_dir(args, wd, cfg)
     state = load_state(wd)
-    feed = {r["c"]: r for r in json.loads(Path(args.file).read_text(encoding="utf-8"))}
+    feed = {r["c"]: r for r in json.loads(feed_path(wd, args.file).read_text(encoding="utf-8"))}
     only = set(args.codes.split(",")) if args.codes else None
 
     todo = []

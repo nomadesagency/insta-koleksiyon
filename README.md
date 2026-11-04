@@ -13,7 +13,7 @@ Instagram'da "Kaydedilenler"e attığın postlar bir süre sonra kaybolup gider.
 - konuşma varsa ses transkripti (Whisper)
 - sabit bir taksonomiden otomatik kategori ve en fazla 2 etiket
 
-Araç, tarayıcı kontrolü olan bir yapay zekâ ajanıyla (ör. Claude Code + Claude in Chrome) çalışmak üzere tasarlandı. Kaydedilenler listesi özeldir, bu yüzden giriş yapılmış bir Chrome oturumu gerekir. Akışın tamamı [SKILL.md](SKILL.md) dosyasında.
+Araç, tarayıcı kontrolü olan bir yapay zeka ajanıyla (ör. Claude Code + Claude in Chrome) çalışmak üzere tasarlandı. Kaydedilenler listesi özeldir, bu yüzden giriş yapılmış bir Chrome oturumu gerekir. Akışın tamamı [SKILL.md](SKILL.md) dosyasında.
 
 ### Gereksinimler
 - macOS, Python 3.9+
